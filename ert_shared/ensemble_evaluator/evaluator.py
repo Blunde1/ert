@@ -77,7 +77,8 @@ class EnsembleEvaluator:
             snapshot_update_event.to_dict(),
         )
         if event and self._clients:
-            await asyncio.wait([client.send(event) for client in self._clients])
+            # Fix deprecation warning
+            await asyncio.gather(*[client.send(event) for client in self._clients])
 
     def _create_cloud_event(
         self,
@@ -203,7 +204,10 @@ class EnsembleEvaluator:
                 data_marshaller=cloudpickle.dumps,
             )
             if self._clients:
-                await asyncio.wait([client.send(message) for client in self._clients])
+                # Fixed deprecation warning
+                await asyncio.gather(
+                    *[client.send(message) for client in self._clients]
+                )
             logger.debug("Sent terminated to clients.")
 
         logger.debug("Async server exiting.")

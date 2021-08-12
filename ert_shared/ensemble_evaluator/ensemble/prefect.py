@@ -8,7 +8,6 @@ import threading
 from typing import Optional
 import uuid
 from datetime import timedelta
-from functools import partial
 import time
 
 import prefect
@@ -214,10 +213,15 @@ class PrefectEnsemble(_Ensemble):
                         ]
         return flow
 
+    @staticmethod
+    def context_method():
+        return "forkserver"
+
     def evaluate(self, config: EvaluatorServerConfig, ee_id: str):
         self._ee_id = ee_id
         self._ee_config = config
-        mp_ctx = multiprocessing.get_context(method="forkserver")
+
+        mp_ctx = multiprocessing.get_context(method="fork")
         self._eval_proc = mp_ctx.Process(
             target=self._evaluate,
             args=(config, ee_id),

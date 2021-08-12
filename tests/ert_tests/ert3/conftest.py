@@ -4,6 +4,12 @@ import pathlib
 import stat
 import sys
 
+import ert.storage
+from ert_shared.storage.server_monitor import (
+    ServerMonitor,
+)
+
+import requests
 import pytest
 
 import ert3
@@ -59,22 +65,50 @@ if __name__ == "__main__":
 
 
 @pytest.fixture()
+def workspace_integration(tmpdir):
+    workspace = tmpdir / "polynomial"
+    workspace.mkdir()
+    workspace.chdir()
+    server = ServerMonitor()
+    server.start()
+
+    resp = requests.get(f"{server.fetch_url()}/healthcheck", auth=server.fetch_auth())
+    assert "ALL OK!" in resp.json()
+
+    ert3.workspace.initialize(workspace)
+    yield workspace
+    print("shutting server down")
+    server.shutdown()
+    ert.storage.StorageInfo.reset()
+
+
+@pytest.fixture()
 def workspace(tmpdir, ert_storage):
     workspace = tmpdir / "polynomial"
     workspace.mkdir()
     workspace.chdir()
     ert3.workspace.initialize(workspace)
     yield workspace
+    ert.storage.StorageInfo.reset()
 
 
-@pytest.fixture()
-def designed_coeffs_record_file(workspace):
+def _create_coeffs_record_file(workspace):
     doe_dir = workspace / ert3.workspace.EXPERIMENTS_BASE / "doe"
     doe_dir.ensure(dir=True)
     coeffs = [{"a": x, "b": x, "c": x} for x in range(10)]
     with open(doe_dir / "coefficients_record.json", "w") as f:
         json.dump(coeffs, f)
-    yield doe_dir / "coefficients_record.json"
+    return doe_dir / "coefficients_record.json"
+
+
+@pytest.fixture()
+def designed_coeffs_record_file(workspace):
+    yield _create_coeffs_record_file(workspace)
+
+
+@pytest.fixture()
+def designed_coeffs_record_file_integration(workspace_integration):
+    yield _create_coeffs_record_file(workspace_integration)
 
 
 @pytest.fixture()
@@ -87,9 +121,9 @@ def designed_blob_record_file(workspace):
 
 
 @pytest.fixture()
-def oat_compatible_record_file(workspace):
+def oat_compatible_record_file(workspace_integration):
     sensitivity_dir = (
-        workspace / ert3.workspace.EXPERIMENTS_BASE / "partial_sensitivity"
+        workspace_integration / ert3.workspace.EXPERIMENTS_BASE / "partial_sensitivity"
     )
     sensitivity_dir.ensure(dir=True)
     coeffs = [{"a": x, "b": x, "c": x} for x in range(6)]
@@ -99,9 +133,9 @@ def oat_compatible_record_file(workspace):
 
 
 @pytest.fixture()
-def oat_incompatible_record_file(workspace):
+def oat_incompatible_record_file(workspace_integration):
     sensitivity_dir = (
-        workspace / ert3.workspace.EXPERIMENTS_BASE / "partial_sensitivity"
+        workspace_integration / ert3.workspace.EXPERIMENTS_BASE / "partial_sensitivity"
     )
     sensitivity_dir.ensure(dir=True)
     coeffs = [{"a": x, "b": x, "c": x} for x in range(10)]
@@ -236,6 +270,7 @@ def function_stages_config():
 
 @pytest.fixture
 def ert_storage(ert_storage_client, monkeypatch):
+    from ert_shared.ensemble_evaluator.ensemble.prefect import PrefectEnsemble
     from ert.storage import _storage
     from ert_storage.app import app
     from httpx import AsyncClient
@@ -256,4 +291,10 @@ def ert_storage(ert_storage_client, monkeypatch):
         _storage,
         "get_info",
         lambda: {"baseurl": "http://127.0.0.1:51820", "auth": ("", "")},
+    )
+    # Required to preserve monkeypatch after starting a process
+    monkeypatch.setattr(
+        PrefectEnsemble,
+        "context_method",
+        lambda: "fork",
     )

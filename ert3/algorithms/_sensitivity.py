@@ -1,3 +1,4 @@
+import asyncio
 from typing import Set, MutableMapping, List, Dict, Optional, Any
 
 import numpy as np
@@ -5,7 +6,7 @@ from SALib.sample import fast_sampler
 from SALib.analyze import fast
 
 from ert3.stats import Distribution, Gaussian, Uniform
-from ert.data import RecordCollectionMap, Record, NumericalRecord
+from ert.data import RecordTransmitter, Record, NumericalRecord
 
 
 def _build_base_records(
@@ -118,7 +119,7 @@ def fast_sample(
 
 def fast_analyze(
     parameters: MutableMapping[str, Distribution],
-    model_output: RecordCollectionMap,
+    model_output: Dict[int, Dict[str, RecordTransmitter]],
     harmonics: Optional[int],
 ) -> Dict[int, Dict[str, Any]]:
 
@@ -131,22 +132,32 @@ def fast_analyze(
 
     if len(parameters) == 0:
         raise ValueError("Cannot study the sensitivity of no variables")
-    if model_output.record_names and len(model_output.record_names) > 1:
-        raise ValueError("Cannot analyze sensitivity with multiple outputs")
-    if model_output.record_names and len(model_output.record_names) < 1:
-        raise ValueError("Cannot analyze sensitivity with no output")
+    futures = []
+    records = []
+    for iens, transmitter_map in model_output.items():
+        if len(transmitter_map) > 1:
+            raise ValueError("Cannot analyze sensitivity with multiple outputs")
+        if len(transmitter_map) < 1:
+            raise ValueError("Cannot analyze sensitivity with no output")
+        for _, transmitter in transmitter_map.items():
+            futures.append(transmitter.load())
+        if iens > 0 and iens % 50 == 0:
+            records.extend(
+                asyncio.get_event_loop().run_until_complete(asyncio.gather(*futures))
+            )
+            futures = []
+    records.extend(
+        asyncio.get_event_loop().run_until_complete(asyncio.gather(*futures))
+    )
 
+    ensemble_size = len(model_output)
     if harmonics is None:
         harmonics = 4
 
     param_size = sum(dist.size for dist in parameters.values())
-    assert model_output.record_names is not None  # To make mypy checker happy
-    record_name = model_output.record_names[0]
-    records = model_output.ensemble_records[record_name].records
 
-    assert model_output.ensemble_size is not None  # To make mypy checker happy
-    if model_output.ensemble_size % param_size == 0:
-        sample_size = int(model_output.ensemble_size / param_size)
+    if ensemble_size % param_size == 0:
+        sample_size = int(ensemble_size / param_size)
     else:
         raise ValueError(
             "The size of the model output must be "
@@ -157,7 +168,7 @@ def fast_analyze(
     data = np.zeros([sample_size * param_size, record_size])
     for i, record in enumerate(records):
         for j in range(record_size):
-            data[i][j] = record.data[j]  # type: ignore
+            data[i][j] = record.data[j]
 
     problem = _build_salib_problem(parameters)
 
