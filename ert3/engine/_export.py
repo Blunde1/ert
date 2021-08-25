@@ -29,34 +29,17 @@ def _prepare_export_parameters(
         if record_source[0] == "storage" or record_source[0] == "stochastic":
             exp_name = None if record_source[0] == "storage" else experiment_name
             source = record_source[1] if record_source[0] == "storage" else None
-            records_url = ert.storage.get_records_url(workspace, exp_name)
-            future = ert.storage.get_record_storage_transmitters(
-                records_url=records_url,
+            collection = ert.storage.get_ensemble_record(
+                workspace=workspace,
                 record_name=record_name,
-                record_source=source,
-                ensemble_size=ensemble_size,
+                experiment_name=exp_name,
+                source=source,
+                ensemble_size=ensemble_size
             )
-            transmitters: Dict[
-                int, Dict[str, ert.storage.StorageRecordTransmitter]
-            ] = asyncio.get_event_loop().run_until_complete(future)
-            assert len(transmitters) == ensemble_size
-            futures = []
-            for iens, transmitter in transmitters.items():
-                # DO NOT export blob records as inputs
-                if transmitter[record_name].record_type == ert.data.RecordType.BYTES:
-                    continue
-                futures.append(transmitter[record_name].load())
-                if iens > 0 and iens % 50 == 0:
-                    records = asyncio.get_event_loop().run_until_complete(
-                        asyncio.gather(*futures)
-                    )
-                    for record in records:
-                        inputs[record_name].append(record.data)
-                    futures = []
-            records = asyncio.get_event_loop().run_until_complete(
-                asyncio.gather(*futures)
-            )
-            for record in records:
+            # DO NOT export blob records as inputs
+            if collection.record_type == ert.data.RecordType.BYTES:
+                continue
+            for record in collection.records:
                 inputs[record_name].append(record.data)
 
         elif record_source[0] == "resources":
