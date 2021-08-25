@@ -178,10 +178,12 @@ def test_run_once_polynomial_evaluation(
 
 
 @pytest.mark.requires_ert_storage
-def test_export_not_run(workspace, ensemble):
+def test_export_not_run(workspace, ensemble, stages_config):
     (workspace / ert3.workspace.EXPERIMENTS_BASE / "evaluation").ensure(dir=True)
     with pytest.raises(ValueError, match="Cannot export experiment"):
-        ert3.engine.export(pathlib.Path(), "evaluation", ensemble, ensemble.size)
+        ert3.engine.export(
+            pathlib.Path(), "evaluation", ensemble, stages_config, ensemble.size
+        )
 
 
 def _load_export_data(workspace, experiment_name):
@@ -210,7 +212,7 @@ def test_export_polynomial_evaluation(
         workspace,
         "evaluation",
     )
-    ert3.engine.export(workspace, "evaluation", ensemble, ensemble.size)
+    ert3.engine.export(workspace, "evaluation", ensemble, stages_config, ensemble.size)
 
     export_data = _load_export_data(workspace, "evaluation")
     assert_export(export_data, ensemble, stages_config, gaussian_parameters_config)
@@ -236,7 +238,11 @@ def test_export_uniform_polynomial_evaluation(
         "uniform_evaluation",
     )
     ert3.engine.export(
-        workspace, "uniform_evaluation", uniform_ensemble, uniform_ensemble.size
+        workspace,
+        "uniform_evaluation",
+        uniform_ensemble,
+        stages_config,
+        uniform_ensemble.size,
     )
 
     export_data = _load_export_data(workspace, "uniform_evaluation")
@@ -265,7 +271,11 @@ def test_export_x_uncertainties_polynomial_evaluation(
         "x_uncertainty",
     )
     ert3.engine.export(
-        workspace, "x_uncertainty", x_uncertainty_ensemble, x_uncertainty_ensemble.size
+        workspace,
+        "x_uncertainty",
+        x_uncertainty_ensemble,
+        x_uncertainty_stages_config,
+        x_uncertainty_ensemble.size,
     )
 
     export_data = _load_export_data(workspace, "x_uncertainty")
@@ -356,6 +366,7 @@ def test_run_presampled(
         workspace,
         "presampled_evaluation",
         presampled_ensemble,
+        stages_config,
         presampled_ensemble.size,
     )
 
@@ -412,6 +423,7 @@ def test_run_uniform_presampled(
         workspace,
         "presampled_uniform_evaluation",
         presampled_uniform_ensemble,
+        stages_config,
         presampled_uniform_ensemble.size,
     )
 
@@ -457,7 +469,7 @@ def test_record_load_and_run(
         workspace,
         "doe",
     )
-    ert3.engine.export(workspace, "doe", doe_ensemble, doe_ensemble.size)
+    ert3.engine.export(workspace, "doe", doe_ensemble, stages_config, doe_ensemble.size)
 
     designed_collection = ert.data.load_collection_from_file(
         designed_coeffs_record_file_integration, "application/json"
@@ -512,7 +524,9 @@ def test_sensitivity_oat_run_and_export(
         experiment_config=sensitivity_oat_experiment_config,
         parameters_config=gaussian_parameters_config,
     )
-    ert3.engine.export(workspace, "sensitivity", sensitivity_ensemble, ensemble_size)
+    ert3.engine.export(
+        workspace, "sensitivity", sensitivity_ensemble, stages_config, ensemble_size
+    )
     export_data = _load_export_data(workspace, "sensitivity")
     assert_sensitivity_export(
         export_data,
@@ -546,7 +560,9 @@ def test_sensitivity_fast_run_and_export(
         experiment_config=sensitivity_fast_experiment_config,
         parameters_config=gaussian_parameters_config,
     )
-    ert3.engine.export(workspace, "sensitivity", sensitivity_ensemble, ensemble_size)
+    ert3.engine.export(
+        workspace, "sensitivity", sensitivity_ensemble, stages_config, ensemble_size
+    )
 
     export_data = _load_export_data(workspace, "sensitivity")
     assert_sensitivity_export(
@@ -588,7 +604,11 @@ def test_partial_sensitivity_run_and_export(
     )
 
     ert3.engine.export(
-        workspace, "partial_sensitivity", partial_sensitivity_ensemble, ensemble_size
+        workspace,
+        "partial_sensitivity",
+        partial_sensitivity_ensemble,
+        double_stages_config,
+        ensemble_size,
     )
 
     export_data = _load_export_data(workspace, "partial_sensitivity")

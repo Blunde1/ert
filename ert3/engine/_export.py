@@ -13,9 +13,14 @@ def _prepare_export_parameters(
     workspace: Path,
     experiment_name: str,
     ensemble: ert3.config.EnsembleConfig,
+    stages_config: ert3.config.StagesConfig,
     ensemble_size: int,
 ) -> Dict[str, List[ert.data.record_data]]:
     inputs = defaultdict(list)
+    step = stages_config.step_from_key(ensemble.forward_model.stage)
+    if not step:
+        raise ValueError(f"No step for key {ensemble.forward_model.stage}")
+
     for input_record in ensemble.input:
         record_name = input_record.record
         record_source = input_record.source.split(_SOURCE_SEPARATOR, maxsplit=1)
@@ -48,19 +53,21 @@ def _prepare_export_parameters(
                     for record in records:
                         inputs[record_name].append(record.data)
                     futures = []
-            if len(futures) > 0:
-                records = asyncio.get_event_loop().run_until_complete(
-                    asyncio.gather(*futures)
-                )
-                for record in records:
-                    inputs[record_name].append(record.data)
+            records = asyncio.get_event_loop().run_until_complete(
+                asyncio.gather(*futures)
+            )
+            for record in records:
+                inputs[record_name].append(record.data)
 
         elif record_source[0] == "resources":
-            file_path = workspace / "resources" / record_source[1]
-            collection = ert.data.load_collection_from_file(file_path)
+            record_mime = next(
+                input_.mime for input_ in step.input if input_.record == record_name
+            )
             # DO NOT export blob records as inputs
-            if collection.record_type == ert.data.RecordType.BYTES:
+            if record_mime == "application/octet-stream":
                 continue
+            file_path = workspace / "resources" / record_source[1]
+            collection = ert.data.load_collection_from_file(file_path, record_mime)
             assert collection.ensemble_size == ensemble_size
             for record in collection.records:
                 inputs[record_name].append(record.data)
@@ -95,6 +102,7 @@ def export(
     workspace_root: Path,
     experiment_name: str,
     ensemble: ert3.config.EnsembleConfig,
+    stages_config: ert3.config.StagesConfig,
     ensemble_size: int,
 ) -> None:
 
@@ -107,7 +115,7 @@ def export(
         raise ValueError("Cannot export experiment that has not been carried out")
 
     parameters = _prepare_export_parameters(
-        workspace_root, experiment_name, ensemble, ensemble_size
+        workspace_root, experiment_name, ensemble, stages_config, ensemble_size
     )
     responses = _prepare_export_responses(
         workspace_root, experiment_name, ensemble, ensemble_size

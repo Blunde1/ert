@@ -53,9 +53,7 @@ def _prepare_experiment_record(
 
     elif record_source[0] == "resources":
         file_path = workspace_root / "resources" / record_source[1]
-        collection = ert.data.load_collection_from_file(
-            file_path, record_mime, ensemble_size
-        )
+        collection = ert.data.load_collection_from_file(file_path, record_mime)
         future = ert.storage.transmit_record_collection(
             record_coll=collection,
             record_name=record_name,
@@ -129,7 +127,7 @@ def _prepare_storage_records(
         transmitters = _prepare_experiment_record(
             record_name,
             record_source,
-                record_mime,
+            record_mime,
             ensemble_size,
             experiment_name,
             workspace_root,
