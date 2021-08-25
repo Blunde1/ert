@@ -606,6 +606,7 @@ def get_ensemble_record(
             records.extend(
                 asyncio.get_event_loop().run_until_complete(asyncio.gather(*futures))
             )
+            futures = []
     records.extend(
         asyncio.get_event_loop().run_until_complete(asyncio.gather(*futures))
     )

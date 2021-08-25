@@ -34,7 +34,7 @@ def _prepare_export_parameters(
                 record_name=record_name,
                 experiment_name=exp_name,
                 source=source,
-                ensemble_size=ensemble_size
+                ensemble_size=ensemble_size,
             )
             # DO NOT export blob records as inputs
             if collection.record_type == ert.data.RecordType.BYTES:
