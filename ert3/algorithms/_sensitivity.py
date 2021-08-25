@@ -141,7 +141,7 @@ def fast_analyze(
             raise ValueError("Cannot analyze sensitivity with no output")
         for _, transmitter in transmitter_map.items():
             futures.append(transmitter.load())
-        if iens > 0 and iens % 100 == 0:
+        if iens > 0 and iens % 50 == 0:
             records.extend(
                 asyncio.get_event_loop().run_until_complete(asyncio.gather(*futures))
             )
