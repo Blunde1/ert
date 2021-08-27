@@ -147,14 +147,15 @@ async def get_record_storage_transmitters(
     }
 
 
-def get(url, headers):
+def get(url: str, headers: Dict[str, Any]) -> requests.Response:
     return requests.get(url, headers=headers)
+
 
 async def _get_from_server_async(
     url: str,
     headers: Dict[str, str],
     **kwargs: Any,
-) -> httpx.Response:
+) -> requests.Response:
 
     loop = asyncio.get_event_loop()
 
