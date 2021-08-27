@@ -221,7 +221,7 @@ class PrefectEnsemble(_Ensemble):
         self._ee_id = ee_id
         self._ee_config = config
 
-        mp_ctx = multiprocessing.get_context(method="fork")
+        mp_ctx = multiprocessing.get_context(method="forkserver")
         self._eval_proc = mp_ctx.Process(
             target=self._evaluate,
             args=(config, ee_id),

@@ -106,6 +106,7 @@ setup(
         "typing-extensions; python_version < '3.8'",
         "uvicorn",
         "websockets >= 9.0.1",
+        "httpcore <= 3.13.3",
         "httpx",
     ],
     setup_requires=["pytest-runner", "setuptools_scm"],
