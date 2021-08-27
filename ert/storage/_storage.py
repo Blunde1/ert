@@ -147,13 +147,24 @@ async def get_record_storage_transmitters(
     }
 
 
+def get(url, headers):
+    return requests.get(url, headers=headers)
+
 async def _get_from_server_async(
     url: str,
     headers: Dict[str, str],
     **kwargs: Any,
 ) -> httpx.Response:
-    async with httpx.AsyncClient() as session:
-        resp = await session.get(url=url, headers=headers, timeout=None, **kwargs)
+
+    loop = asyncio.get_event_loop()
+
+    future = loop.run_in_executor(
+        None,
+        partial(get, url, headers),
+    )
+    resp = await future
+    # async with httpx.AsyncClient() as session:
+    #     resp = await session.get(url=url, headers=headers, **kwargs)
 
     if resp.status_code == HTTPStatus.OK:
         return resp
