@@ -177,13 +177,26 @@ async def _get_from_server_async(
     raise ert.exceptions.StorageError(resp.text)
 
 
+def post(url: str, headers: Dict[str, Any], **kwargs: Any) -> requests.Response:
+    return requests.post(url=url, headers=headers, **kwargs)
+
+
 async def _post_to_server_async(
     url: str,
     headers: Dict[str, str],
     **kwargs: Any,
-) -> httpx.Response:
-    async with httpx.AsyncClient() as session:
-        resp = await session.post(url=url, headers=headers, **kwargs)
+) -> requests.Response:
+
+    loop = asyncio.get_event_loop()
+
+    future = loop.run_in_executor(
+        None,
+        partial(post, url, headers, **kwargs),
+    )
+    resp = await future
+
+    # async with httpx.AsyncClient() as session:
+    #     resp = await session.post(url=url, headers=headers, **kwargs)
 
     if resp.status_code != HTTPStatus.OK:
         logger.error("Failed to post to %s. Response: %s", url, resp.text)
