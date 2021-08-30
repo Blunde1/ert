@@ -206,13 +206,25 @@ async def _post_to_server_async(
     return resp
 
 
+def put(url: str, headers: Dict[str, Any], **kwargs: Any) -> requests.Response:
+    return requests.put(url=url, headers=headers, **kwargs)
+
+
 async def _put_to_server_async(
     url: str,
     headers: Dict[str, str],
     **kwargs: Any,
-) -> httpx.Response:
-    async with httpx.AsyncClient() as session:
-        resp = await session.put(url=url, headers=headers, **kwargs)
+) -> requests.Response:
+    loop = asyncio.get_event_loop()
+
+    future = loop.run_in_executor(
+        None,
+        partial(put, url, headers, **kwargs),
+    )
+    resp = await future
+
+    # async with httpx.AsyncClient() as session:
+    #     resp = await session.put(url=url, headers=headers, **kwargs)
 
     if resp.status_code != HTTPStatus.OK:
         logger.error("Failed to post to %s. Response: %s", url, resp.text)
@@ -366,12 +378,13 @@ async def transmit_record_collection(
     for iens, record in enumerate(record_coll.records):
         transmitter = StorageRecordTransmitter(record_name, records_url, iens=iens)
         futures.append(transmitter.transmit_record(record))
+        await transmitter.transmit_record(record)
         transmitter_list.append(transmitter)
         transmitters[iens] = {record_name: transmitter}
-        if iens > 1 and iens % 50 == 0:
-            await asyncio.gather(*futures)
-            futures = []
-    await asyncio.gather(*futures)
+    #     if iens > 1 and iens % 50 == 0:
+    #         await asyncio.gather(*futures)
+    #         futures = []
+    # await asyncio.gather(*futures)
 
     for transmitter in transmitter_list:
         metadata["uris"].append(transmitter.uri)

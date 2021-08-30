@@ -281,14 +281,14 @@ def test_get_record_names(tmpdir, ert_storage):
                     ert.data.NumericalRecord(data=[0]) for rid in range(ensemble_size)
                 ]
             )
-            asyncio.get_event_loop().run_until_complete(
-                ert.storage.transmit_record_collection(
-                    record_coll=ensemble_record,
-                    record_name=name,
-                    workspace=tmpdir,
-                    experiment_name=experiment,
-                )
+            future = ert.storage.transmit_record_collection(
+                record_coll=ensemble_record,
+                record_name=name,
+                workspace=tmpdir,
+                experiment_name=experiment,
             )
+
+            asyncio.get_event_loop().run_until_complete(future)
             experiment_records[str(experiment)].append(name)
 
             recnames = ert.storage.get_ensemble_record_names(

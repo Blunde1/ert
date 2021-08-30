@@ -281,11 +281,11 @@ def ert_storage(ert_storage_client, monkeypatch):
     for func in "get", "post", "put", "delete":
         monkeypatch.setattr(_storage.requests, func, getattr(ert_storage_client, func))
 
-    async_client = AsyncClient(app=app, base_url="http://127.0.0.1:51820")
-    for func in "get", "post", "put", "delete":
-        monkeypatch.setattr(
-            _storage.httpx.AsyncClient, func, getattr(async_client, func)
-        )
+    # async_client = AsyncClient(app=app, base_url="http://127.0.0.1:51820")
+    # for func in "get", "post", "put", "delete":
+    #     monkeypatch.setattr(
+    #         _storage.httpx.AsyncClient, func, getattr(async_client, func)
+    #     )
 
     monkeypatch.setattr(
         _storage,
