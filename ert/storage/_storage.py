@@ -6,7 +6,6 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Set
 
-import httpx
 import pandas as pd
 import requests
 from pydantic import BaseModel

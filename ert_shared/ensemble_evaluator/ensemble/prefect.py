@@ -213,10 +213,6 @@ class PrefectEnsemble(_Ensemble):
                         ]
         return flow
 
-    @staticmethod
-    def context_method():
-        return "forkserver"
-
     def evaluate(self, config: EvaluatorServerConfig, ee_id: str):
         self._ee_id = ee_id
         self._ee_config = config

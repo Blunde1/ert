@@ -292,9 +292,3 @@ def ert_storage(ert_storage_client, monkeypatch):
         "get_info",
         lambda: {"baseurl": "http://127.0.0.1:51820", "auth": ("", "")},
     )
-    # Required to preserve monkeypatch after starting a process
-    monkeypatch.setattr(
-        PrefectEnsemble,
-        "context_method",
-        lambda: "fork",
-    )
