@@ -44,7 +44,6 @@ jobs:
         ert3 service check storage --timeout 100
 
     - name: Run polynomial demo
-      if: matrix.os == 'macos-latest'
       env:
         OBJC_DISABLE_INITIALIZE_FORK_SAFETY: 'YES'
       run: |
