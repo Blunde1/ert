@@ -132,23 +132,16 @@ def fast_analyze(
 
     if len(parameters) == 0:
         raise ValueError("Cannot study the sensitivity of no variables")
-    futures = []
     records = []
-    for iens, transmitter_map in model_output.items():
+    for transmitter_map in model_output.values():
         if len(transmitter_map) > 1:
             raise ValueError("Cannot analyze sensitivity with multiple outputs")
         if len(transmitter_map) < 1:
             raise ValueError("Cannot analyze sensitivity with no output")
-        for _, transmitter in transmitter_map.items():
-            futures.append(transmitter.load())
-        if iens > 0 and iens % 50 == 0:
-            records.extend(
-                asyncio.get_event_loop().run_until_complete(asyncio.gather(*futures))
+        for transmitter in transmitter_map.values():
+            records.append(
+                asyncio.get_event_loop().run_until_complete(transmitter.load())
             )
-            futures = []
-    records.extend(
-        asyncio.get_event_loop().run_until_complete(asyncio.gather(*futures))
-    )
 
     ensemble_size = len(model_output)
     if harmonics is None:
@@ -168,7 +161,7 @@ def fast_analyze(
     data = np.zeros([sample_size * param_size, record_size])
     for i, record in enumerate(records):
         for j in range(record_size):
-            data[i][j] = record.data[j]
+            data[i][j] = record.data[j]  # type: ignore
 
     problem = _build_salib_problem(parameters)
 

@@ -77,9 +77,9 @@ def workspace_integration(tmpdir):
 
     ert3.workspace.initialize(workspace)
     yield workspace
-    print("shutting server down")
     server.shutdown()
-    ert.storage.StorageInfo.reset()
+    ert.storage.StorageInfo._url = None
+    ert.storage.StorageInfo._token = None
 
 
 @pytest.fixture()
@@ -89,7 +89,8 @@ def workspace(tmpdir, ert_storage):
     workspace.chdir()
     ert3.workspace.initialize(workspace)
     yield workspace
-    ert.storage.StorageInfo.reset()
+    ert.storage.StorageInfo._url = None
+    ert.storage.StorageInfo._token = None
 
 
 def _create_coeffs_record_file(workspace):
@@ -270,22 +271,13 @@ def function_stages_config():
 
 @pytest.fixture
 def ert_storage(ert_storage_client, monkeypatch):
-    from ert_shared.ensemble_evaluator.ensemble.prefect import PrefectEnsemble
     from ert.storage import _storage
-    from ert_storage.app import app
-    from httpx import AsyncClient
 
     ert_storage_client.raise_on_client_error = False
     monkeypatch.setenv("ERT_STORAGE_NO_TOKEN", "ON")
     # Fix requests library
     for func in "get", "post", "put", "delete":
         monkeypatch.setattr(_storage.requests, func, getattr(ert_storage_client, func))
-
-    # async_client = AsyncClient(app=app, base_url="http://127.0.0.1:51820")
-    # for func in "get", "post", "put", "delete":
-    #     monkeypatch.setattr(
-    #         _storage.httpx.AsyncClient, func, getattr(async_client, func)
-    #     )
 
     monkeypatch.setattr(
         _storage,

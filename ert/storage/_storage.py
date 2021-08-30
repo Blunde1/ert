@@ -62,11 +62,6 @@ class StorageInfo:
             cls._set_info()
         return str(StorageInfo._token)
 
-    @classmethod
-    def reset(cls) -> None:
-        cls._url = None
-        cls._token = None
-
 
 class StorageRecordTransmitter(ert.data.RecordTransmitter):
     def __init__(self, name: str, storage_url: str, iens: Optional[int] = None):
@@ -127,6 +122,9 @@ async def get_record_storage_transmitters(
     metadata = await get_record_metadata(uri)
     record_type = metadata["record_type"]
     uris = metadata["uris"]
+    # We giving an ensemble size we expect the number of uris in the record metadata
+    # to match the size of the ensemble or be equal to 1, in the case of an
+    # uniform record and, has the same data stored only once for all the realizations
     if ensemble_size is not None and 1 < len(uris) != ensemble_size:
         raise ert.exceptions.ErtError(
             f"Ensemble size {ensemble_size} does not match stored record ensemble size {len(uris)}"
@@ -134,9 +132,10 @@ async def get_record_storage_transmitters(
 
     transmitters = []
     for record_uri in uris:
-        t = StorageRecordTransmitter(record_source, records_url)
-        t.set_transmitted(record_uri, record_type)
-        transmitters.append(t)
+        transmitter = StorageRecordTransmitter(record_source, records_url)
+        # Record data has already been stored, now just setting the transmitter uri and record type
+        transmitter.set_transmitted(record_uri, record_type)
+        transmitters.append(transmitter)
 
     if ensemble_size is not None and len(transmitters) == 1:
         return {iens: {record_name: transmitters[0]} for iens in range(ensemble_size)}
@@ -163,17 +162,13 @@ async def _get_from_server_async(
         partial(get, url, headers),
     )
     resp = await future
-    # async with httpx.AsyncClient() as session:
-    #     resp = await session.get(url=url, headers=headers, **kwargs)
 
-    if resp.status_code == HTTPStatus.OK:
-        return resp
-    if resp.status_code == HTTPStatus.NOT_FOUND:
+    if resp.status_code != HTTPStatus.OK:
         logger.error("Failed to fetch from %s. Response: %s", url, resp.text)
-        raise ert.exceptions.ElementMissingError(resp.text)
-
-    logger.error("Failed to fetch from %s. Response: %s", url, resp.text)
-    raise ert.exceptions.StorageError(resp.text)
+        if resp.status_code == HTTPStatus.NOT_FOUND:
+            raise ert.exceptions.ElementMissingError(resp.text)
+        raise ert.exceptions.StorageError(resp.text)
+    return resp
 
 
 def post(url: str, headers: Dict[str, Any], **kwargs: Any) -> requests.Response:
@@ -193,9 +188,6 @@ async def _post_to_server_async(
         partial(post, url, headers, **kwargs),
     )
     resp = await future
-
-    # async with httpx.AsyncClient() as session:
-    #     resp = await session.post(url=url, headers=headers, **kwargs)
 
     if resp.status_code != HTTPStatus.OK:
         logger.error("Failed to post to %s. Response: %s", url, resp.text)
@@ -221,9 +213,6 @@ async def _put_to_server_async(
         partial(put, url, headers, **kwargs),
     )
     resp = await future
-
-    # async with httpx.AsyncClient() as session:
-    #     resp = await session.put(url=url, headers=headers, **kwargs)
 
     if resp.status_code != HTTPStatus.OK:
         logger.error("Failed to post to %s. Response: %s", url, resp.text)
@@ -319,6 +308,7 @@ async def get_record_metadata(record_url: str) -> Dict[Any, Any]:
     headers = {
         "Token": StorageInfo.token(),
     }
+    # TODO once storage returns proper record metadata information add proper support for metadata
     url = f"{record_url}/userdata?realization_index=0"
     resp = await _get_from_server_async(url, headers)
     ret: Dict[Any, Any] = resp.json()
@@ -361,7 +351,7 @@ async def transmit_record_collection(
             f" data size {record_coll.ensemble_size}"
         )
 
-    if ensemble_size != record_coll.ensemble_size:
+    if record_coll.ensemble_size == 1:
         record = record_coll.records[0]
         transmitter = ert.storage.StorageRecordTransmitter(
             name=record_name, storage_url=records_url, iens=0
@@ -371,19 +361,13 @@ async def transmit_record_collection(
         await add_record_metadata(records_url, record_name, metadata)
         return {iens: {record_name: transmitter} for iens in range(ensemble_size)}
 
-    futures = []
     transmitters: Dict[int, Dict[str, StorageRecordTransmitter]] = {}
     transmitter_list = []
     for iens, record in enumerate(record_coll.records):
         transmitter = StorageRecordTransmitter(record_name, records_url, iens=iens)
-        futures.append(transmitter.transmit_record(record))
         await transmitter.transmit_record(record)
         transmitter_list.append(transmitter)
         transmitters[iens] = {record_name: transmitter}
-    #     if iens > 1 and iens % 50 == 0:
-    #         await asyncio.gather(*futures)
-    #         futures = []
-    # await asyncio.gather(*futures)
 
     for transmitter in transmitter_list:
         metadata["uris"].append(transmitter.uri)
@@ -634,19 +618,12 @@ def get_ensemble_record(
             ensemble_size=ensemble_size,
         )
     )
-    futures = []
     records = []
-    for iens, transmitter_map in transmitters.items():
-        for _, transmitter in transmitter_map.items():
-            futures.append(transmitter.load())
-        if iens > 0 and iens % 50 == 0:
-            records.extend(
-                asyncio.get_event_loop().run_until_complete(asyncio.gather(*futures))
+    for transmitter_map in transmitters.values():
+        for transmitter in transmitter_map.values():
+            records.append(
+                asyncio.get_event_loop().run_until_complete(transmitter.load())
             )
-            futures = []
-    records.extend(
-        asyncio.get_event_loop().run_until_complete(asyncio.gather(*futures))
-    )
 
     return ert.data.RecordCollection(records=records)
 
