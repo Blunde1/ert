@@ -236,7 +236,7 @@ def _export(workspace: Path, args: Any) -> None:
     parameters_config = _load_parameters_config(workspace)
     stages_config = _load_stages_config(workspace)
 
-    ensemble_size = ert3.engine.estimate_ensemble_size(
+    ensemble_size = ert3.engine.get_ensemble_size(
         ensemble=ensemble,
         experiment_config=experiment_config,
         parameters_config=parameters_config,

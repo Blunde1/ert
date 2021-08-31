@@ -519,7 +519,7 @@ def test_sensitivity_oat_run_and_export(
         workspace,
         "sensitivity",
     )
-    ensemble_size = ert3.engine.estimate_ensemble_size(
+    ensemble_size = ert3.engine.get_ensemble_size(
         ensemble=sensitivity_ensemble,
         experiment_config=sensitivity_oat_experiment_config,
         parameters_config=gaussian_parameters_config,
@@ -555,7 +555,7 @@ def test_sensitivity_fast_run_and_export(
         workspace,
         "sensitivity",
     )
-    ensemble_size = ert3.engine.estimate_ensemble_size(
+    ensemble_size = ert3.engine.get_ensemble_size(
         ensemble=sensitivity_ensemble,
         experiment_config=sensitivity_fast_experiment_config,
         parameters_config=gaussian_parameters_config,
@@ -597,7 +597,7 @@ def test_partial_sensitivity_run_and_export(
         workspace,
         "partial_sensitivity",
     )
-    ensemble_size = ert3.engine.estimate_ensemble_size(
+    ensemble_size = ert3.engine.get_ensemble_size(
         ensemble=partial_sensitivity_ensemble,
         experiment_config=sensitivity_oat_experiment_config,
         parameters_config=gaussian_parameters_config,

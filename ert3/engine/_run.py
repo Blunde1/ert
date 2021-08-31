@@ -350,7 +350,7 @@ def run_sensitivity_analysis(
     )
 
 
-def estimate_ensemble_size(
+def get_ensemble_size(
     ensemble: ert3.config.EnsembleConfig,
     experiment_config: ert3.config.ExperimentConfig,
     parameters_config: ert3.config.ParametersConfig,
