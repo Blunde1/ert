@@ -72,7 +72,8 @@ class StorageRecordTransmitter(ert.data.RecordTransmitter):
 
     @property
     def uri(self) -> str:
-        assert self.is_transmitted()
+        if not self.is_transmitted():
+            raise RuntimeError(f"Record {self._name} not transmitted")
         return self._uri
 
     @property
