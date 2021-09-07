@@ -158,6 +158,9 @@ async def _get_from_server_async(
 
     loop = asyncio.get_event_loop()
 
+    # Using sync code because one of the httpx dependencies (anyio) throws an
+    # AttributeError: module 'anyio._backends._asyncio' has no attribute 'current_time'
+    # Refactor and try to use aiohttp or httpx once the issue above is fixed
     future = loop.run_in_executor(
         None,
         partial(_get, url, headers),
@@ -183,7 +186,9 @@ async def _post_to_server_async(
 ) -> requests.Response:
 
     loop = asyncio.get_event_loop()
-
+    # Using sync code because one of the httpx dependencies (anyio) throws an
+    # AttributeError: module 'anyio._backends._asyncio' has no attribute 'current_time'
+    # Refactor and try to use aiohttp or httpx once the issue above is fixed
     future = loop.run_in_executor(
         None,
         partial(_post, url, headers, **kwargs),
@@ -209,6 +214,9 @@ async def _put_to_server_async(
 ) -> requests.Response:
     loop = asyncio.get_event_loop()
 
+    # Using sync code because one of the httpx dependencies (anyio) throws an
+    # AttributeError: module 'anyio._backends._asyncio' has no attribute 'current_time'
+    # Refactor and try to use aiohttp or httpx once the issue above is fixed
     future = loop.run_in_executor(
         None,
         partial(_put, url, headers, **kwargs),
