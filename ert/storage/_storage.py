@@ -146,7 +146,7 @@ async def get_record_storage_transmitters(
     }
 
 
-def get(url: str, headers: Dict[str, Any]) -> requests.Response:
+def _get(url: str, headers: Dict[str, Any]) -> requests.Response:
     return requests.get(url, headers=headers)
 
 
@@ -160,7 +160,7 @@ async def _get_from_server_async(
 
     future = loop.run_in_executor(
         None,
-        partial(get, url, headers),
+        partial(_get, url, headers),
     )
     resp = await future
 
@@ -172,7 +172,7 @@ async def _get_from_server_async(
     return resp
 
 
-def post(url: str, headers: Dict[str, Any], **kwargs: Any) -> requests.Response:
+def _post(url: str, headers: Dict[str, Any], **kwargs: Any) -> requests.Response:
     return requests.post(url=url, headers=headers, **kwargs)
 
 
@@ -186,7 +186,7 @@ async def _post_to_server_async(
 
     future = loop.run_in_executor(
         None,
-        partial(post, url, headers, **kwargs),
+        partial(_post, url, headers, **kwargs),
     )
     resp = await future
 
@@ -198,7 +198,7 @@ async def _post_to_server_async(
     return resp
 
 
-def put(url: str, headers: Dict[str, Any], **kwargs: Any) -> requests.Response:
+def _put(url: str, headers: Dict[str, Any], **kwargs: Any) -> requests.Response:
     return requests.put(url=url, headers=headers, **kwargs)
 
 
@@ -211,7 +211,7 @@ async def _put_to_server_async(
 
     future = loop.run_in_executor(
         None,
-        partial(put, url, headers, **kwargs),
+        partial(_put, url, headers, **kwargs),
     )
     resp = await future
 
@@ -346,7 +346,8 @@ async def transmit_record_collection(
     else:
         ensemble_size = record_coll.ensemble_size
 
-    if ensemble_size != record_coll.ensemble_size and record_coll.ensemble_size > 1:
+    # Handle special case when we have a uniform record collection (collection of size one)
+    if record_coll.ensemble_size != 1 and ensemble_size != record_coll.ensemble_size:
         raise ert.exceptions.ErtError(
             f"Experiment ensemble size {ensemble_size} does not match"
             f" data size {record_coll.ensemble_size}"
