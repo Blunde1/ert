@@ -165,21 +165,18 @@ class SnapshotModel(QAbstractItemModel):
             )
             stack.callback(self.dataChanged.emit, iter_index, iter_index_bottom_right)
 
+            changed_reals = []
             for real_id in iter_node.data[SORTED_REALIZATION_IDS]:
                 real = partial.data()[ids.REALS].get(real_id)
                 if not real:
                     continue
                 real_node = iter_node.children[real_id]
+
                 if real.get(ids.STATUS):
                     real_node.data[ids.STATUS] = real[ids.STATUS]
+                    changed_reals.append(real_node.row())
 
                 real_index = self.index(real_node.row(), 0, iter_index)
-                real_index_bottom_right = self.index(
-                    real_node.row(), self.columnCount(iter_index) - 1, iter_index
-                )
-                stack.callback(
-                    self.dataChanged.emit, real_index, real_index_bottom_right
-                )
 
                 for job_id, color in (
                     metadata[REAL_JOB_STATUS_AGGREGATED].get(real_id, {}).items()
@@ -203,16 +200,12 @@ class SnapshotModel(QAbstractItemModel):
                     if not step.get(ids.JOBS):
                         continue
 
+                    changed_jobs = []
                     for job_id, job in step[ids.JOBS].items():
                         job_node = step_node.children[job_id]
 
-                        job_index = self.index(job_node.row(), 0, step_index)
-                        job_index_bottom_right = self.index(
-                            job_node.row(), self.columnCount() - 1, step_index
-                        )
-                        stack.callback(
-                            self.dataChanged.emit, job_index, job_index_bottom_right
-                        )
+                        # if it is present, assume it has changed
+                        changed_jobs.append(job_node.row())
 
                         if job.get(ids.STATUS):
                             job_node.data[ids.STATUS] = job[ids.STATUS]
@@ -237,6 +230,23 @@ class SnapshotModel(QAbstractItemModel):
                                 job_node.data[ids.DATA] = job_node.data[ids.DATA].set(
                                     attr, job.get(ids.DATA).get(attr)
                                 )
+
+                    if changed_jobs:
+                        job_top_left = self.index(min(changed_jobs), 0, step_index)
+                        job_bottom_right = self.index(
+                            max(changed_jobs),
+                            self.columnCount(step_index) - 1,
+                            step_index,
+                        )
+                        stack.callback(
+                            self.dataChanged.emit, job_top_left, job_bottom_right
+                        )
+            if changed_reals:
+                real_top_left = self.index(min(changed_reals), 0, iter_index)
+                real_bottom_right = self.index(
+                    max(changed_reals), self.columnCount(iter_index) - 1, iter_index
+                )
+                stack.callback(self.dataChanged.emit, real_top_left, real_bottom_right)
 
     def _add_snapshot(self, snapshot: Snapshot, iter_: int):
         # Parts of the metadata will be used in the underlying data model,
