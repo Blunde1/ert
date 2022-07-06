@@ -345,8 +345,8 @@ def js_case():
             stdout="std_out_file",
             stderr="std_err_file",
             data={
-                CURRENT_MEMORY_USAGE: {j},
-                MAX_MEMORY_USAGE: {j},
+                CURRENT_MEMORY_USAGE: j,
+                MAX_MEMORY_USAGE: j,
             },
         )
 
@@ -398,7 +398,4 @@ def test_js_bench(runmodel, js_case, qtbot, benchmark):
             else:
                 model._add_partial_snapshot(SnapshotModel.prerender(thing), 0)
 
-    # benchmark(target)
-    target()
-
-    qtbot.stop()
+    benchmark(target)
