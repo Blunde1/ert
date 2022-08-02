@@ -332,9 +332,11 @@ def test_run_dialog(events, tab_widget_count, runmodel, qtbot, mock_tracker):
 
 @pytest.fixture
 def js_case():
+    num_realizations = 1000
+    num_jobs = 100
     things = []
     step = Step(status="")
-    for j in range(70):
+    for j in range(num_jobs):
         step.jobs[str(j)] = Job(
             start_time=dt.now(),
             end_time=dt.now(),
@@ -355,7 +357,7 @@ def js_case():
         status=ENSEMBLE_STATE_STARTED,
         reals={},
     )
-    for i in range(0, 200):
+    for i in range(0, num_realizations):
         snapshot.reals[str(i)] = copy.deepcopy(real)
     snapshot = Snapshot(snapshot.dict())
     things.append(snapshot)
@@ -375,9 +377,9 @@ def js_case():
     ]
     for i in range(4):
         partial = PartialSnapshot(snapshot)
-        for r in range(200):
+        for r in range(num_realizations):
             partial.update_real(str(r), Realization(status=real_states[i]))
-            for j in range(70):
+            for j in range(num_jobs):
                 partial.update_job(str(r), "0", str(j), Job(status=job_states[i]))
         things.append(partial)
     return things
