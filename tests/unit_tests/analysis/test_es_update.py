@@ -1,15 +1,22 @@
 from argparse import ArgumentParser
 from pathlib import Path
+from textwrap import dedent
 
 import numpy as np
+
+import pandas as pd
 import pytest
 from iterative_ensemble_smoother import IterativeEnsembleSmoother
+
+rng = np.random.default_rng()
 
 from ert import LibresFacade
 from ert.__main__ import ert_parser
 from ert._c_wrappers.enkf import EnKFMain, EnkfNode, NodeId, ResConfig
 from ert.analysis import ErtAnalysisError, ESUpdate
-from ert.analysis._es_update import _create_temporary_parameter_storage
+from ert.analysis._es_update import (
+    _create_temporary_parameter_storage,
+)
 from ert.cli import ENSEMBLE_EXPERIMENT_MODE, ENSEMBLE_SMOOTHER_MODE
 from ert.cli.main import run_cli
 
@@ -152,6 +159,137 @@ def test_that_posterior_has_lower_variance_than_prior(copy_case):
         < np.linalg.det(df_target.cov().to_numpy())
         < np.linalg.det(df_default.cov().to_numpy())
     )
+
+
+@pytest.mark.integration_test
+def test_that_localization_is_according_to_theory(tmp_path, monkeypatch):
+    import os
+    import stat
+
+    monkeypatch.chdir(tmp_path)
+    N = 200
+    var = 4
+    std = np.sqrt(var)
+
+    obs_val = 10
+    df = pd.DataFrame({"value": [obs_val, obs_val, obs_val], "error": [std, std, std]})
+
+    df.to_csv("obs_data_0.txt", sep=" ", header=False, index=False)
+
+    with open("observations", "w") as fout:
+        fout.write(
+            dedent(
+                """
+            GENERAL_OBSERVATION OBS {
+            DATA       = RESPONSE;
+            INDEX_LIST = 0;
+            RESTART    = 0;
+            OBS_FILE   = obs_data_0.txt;
+            };
+            """
+            )
+        )
+
+    PRIORS = "priors.txt"
+    with open(PRIORS, "w") as fout:
+        fout.write(
+            dedent(
+                f"""
+            PARAM_1 NORMAL 0 {std}
+            PARAM_2 NORMAL 0 {std}
+            PARAM_3 NORMAL 0 {std}
+            """
+            )
+        )
+
+    with open("template.txt", "w") as fout:
+        fout.write(
+            dedent(
+                """
+        {"p1": <PARAM_1>,
+        "p2": <PARAM_2>,
+        "p3": <PARAM_3>
+        }
+        """
+            )
+        )
+
+    FORWARD_MODEL = "forward_model.py"
+    with open(FORWARD_MODEL, "w") as fout:
+        fout.write(
+            dedent(
+                """#!/usr/bin/env python
+
+import json
+
+def _load_coeffs(filename):
+    with open(filename) as f:
+        return json.load(f)
+
+if __name__ == "__main__":
+    params = _load_coeffs("include.json")
+    output = list(params.values())
+    with open("result_0.out", "w") as f:
+                """
+            )
+        )
+        fout.write(r"        f.write('\n'.join(map(str, output)))")
+
+    st = os.stat(FORWARD_MODEL)
+    os.chmod(FORWARD_MODEL, st.st_mode | stat.S_IEXEC)
+
+    with open("FORWARD_MODEL", "w") as fout:
+        fout.write("EXECUTABLE forward_model.py")
+
+    with open("time_map", "w") as fout:
+        fout.write("2014-09-10")
+
+    with open("config.ert", "w") as fout:
+        fout.write(
+            dedent(
+                f"""
+            QUEUE_SYSTEM LOCAL
+            QUEUE_OPTION LOCAL MAX_RUNNING 100
+
+            ANALYSIS_SET_VAR STD_ENKF LOCALIZATION True
+            ANALYSIS_SET_VAR STD_ENKF LOCALIZATION_CORRELATION_THRESHOLD 0.0
+
+            NUM_REALIZATIONS {N}
+            OBS_CONFIG observations
+            TIME_MAP time_map
+
+            GEN_KW PARAMS_ID template.txt include.json {PRIORS}
+
+            INSTALL_JOB fm FORWARD_MODEL
+            FORWARD_MODEL fm
+
+            GEN_DATA RESPONSE RESULT_FILE:result_%d.out REPORT_STEPS:0 INPUT_FORMAT:ASCII
+            """
+            )
+        )
+
+    parser = ArgumentParser(prog="test_main")
+    parsed = ert_parser(
+        parser,
+        [
+            ENSEMBLE_SMOOTHER_MODE,
+            "--current-case",
+            "default",
+            "--target-case",
+            "target",
+            "config.ert",
+        ],
+    )
+
+    run_cli(parsed)
+
+    facade = LibresFacade.from_config_file("config.ert")
+    df_target = facade.load_all_gen_kw_data("target").T
+
+    for i in range(3):
+        assert np.isclose(df_target.iloc[i].mean(), obs_val / 2, rtol=0.2)
+
+    assert (np.abs(np.cov(df_target) - 2 * np.identity(3)) < 0.4).all()
 
 
 @pytest.mark.parametrize(
