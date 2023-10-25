@@ -444,6 +444,75 @@ def _update_with_row_scaling(
         _save_temp_storage_to_disk(target_fs, temp_storage, iens_active_index)
 
 
+
+#### TED-LASSO ####
+def _parameter_ensemble(
+    source_fs: EnsembleReader,
+    iens_active_index: npt.NDArray[np.int_],
+    param_groups: List[str],
+) -> npt.NDArray[np.double]:
+    temp_storage = TempStorage()
+    for param_group in param_groups:
+        _temp_storage = _create_temporary_parameter_storage(
+            source_fs, iens_active_index, param_group
+        )
+        temp_storage[param_group] = _temp_storage[param_group]
+    matrices = [temp_storage[p] for p in param_groups]
+    return np.vstack(matrices) if matrices else None
+
+
+def ensemble_gaussian_update(X, cov_xy, cov_y, cov_eps, Y, d):
+    X_tmp = X.copy()
+    n = X_tmp.shape[0]
+    p = X_tmp.shape[1]
+    m = cov_eps.shape[0]
+    K = cov_xy @ np.linalg.inv(cov_y + cov_eps) # p x m
+    for i in range(n):
+        d_i = np.array([np.random.normal(loc=d[k], scale=np.sqrt(cov_eps[k,k])) for k in range(m)])
+        X_tmp[i,:] = X_tmp[i,:] + K @ (Y[i:,] - d_i)
+    return X_tmp
+
+
+from sklearn.linear_model import LassoCV, Lasso
+from sklearn.preprocessing import StandardScaler
+
+def linear_l1_regression(X, Y):
+    n, p = X.shape #  p: number of features
+    n, m = Y.shape #  m: number of y responses
+
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    coefficients_matrix = np.zeros((p,m))
+
+    # loop over features
+    for j in range(m):
+    # pick out y_j
+        y_j = Y[:,j]
+        
+        # learn regularization
+        eps = 1e-3  # the smaller it is the longer is the path
+        max_iter = 10000
+        model_cv = LassoCV(cv=10, fit_intercept=False, max_iter=max_iter, eps=eps,)
+        model_cv.fit(X_scaled, y_j)
+        alpha_optimal = model_cv.alpha_
+
+        # learn lasso model
+        model = Lasso(alpha=alpha_optimal, fit_intercept=False, max_iter=max_iter)
+        model.fit(X_scaled, y_j)
+
+        # extract coefficients
+        coefficients_matrix[:,j] = model.coef_
+    return coefficients_matrix, scaler
+
+def compute_cross_covariance(coefficient_matrix, scaler):
+    """Compute cross-covariance between parameters and responses"""
+    p = coefficient_matrix.shape[0]
+    cov_x = np.eye(p) # gen_kw originally sampled from standard normal
+    inv_sd = np.diag(1.0/scaler.scale_)
+    H = inv_sd @ coefficient_matrix
+    return cov_x @ H
+
+
 def analysis_ES(
     updatestep: UpdateConfiguration,
     rng: np.random.Generator,
@@ -498,6 +567,19 @@ def analysis_ES(
         smoother = ies.ES()
         truncation = module.get_truncation()
         noise = rng.standard_normal(size=(num_obs, ensemble_size))
+
+        # TED-LASSO
+        # input X, Y, d, eps
+        X = _parameter_ensemble(
+            source_fs, iens_active_index, param_groups
+        )
+        Y = S
+        d = observation_values
+        cov_y = np.cov(Y)
+        cov_eps = np.diag(observation_errors)
+        # learn cross-covariance
+        coefficient_matrix, scaler = linear_l1_regression(X, Y)
+        cov_xy = compute_cross_covariance(coefficient_matrix, scaler)
 
         for param_group in update_step.parameters:
             source: Union[EnsembleReader, EnsembleAccessor]
@@ -579,23 +661,31 @@ def analysis_ES(
                             param_batch_idx[row_indices], :
                         ] = smoother.update(X_chunk)
             else:
-                smoother.fit(
-                    S,
-                    observation_errors,
-                    observation_values,
-                    noise=noise,
-                    truncation=truncation,
-                    inversion=ies.InversionType(module.inversion),
-                    param_ensemble=param_ensemble,
-                )
+                # smoother.fit(
+                #     S,
+                #     observation_errors,
+                #     observation_values,
+                #     noise=noise,
+                #     truncation=truncation,
+                #     inversion=ies.InversionType(module.inversion),
+                #     param_ensemble=param_ensemble,
+                # )
                 if active_indices := param_group.index_list:
-                    temp_storage[param_group.name][active_indices, :] = smoother.update(
-                        temp_storage[param_group.name][active_indices, :]
+                    X_group = temp_storage[param_group.name][active_indices, :]
+                    temp_storage[param_group.name][active_indices, :] = ensemble_gaussian_update(
+                        X_group, cov_xy, cov_y, cov_eps, Y, d
                     )
+                    # temp_storage[param_group.name][active_indices, :] = smoother.update(
+                    #     temp_storage[param_group.name][active_indices, :]
+                    # )
                 else:
-                    temp_storage[param_group.name] = smoother.update(
-                        temp_storage[param_group.name]
+                    X_group = temp_storage[param_group.name]
+                    temp_storage[param_group.name] = ensemble_gaussian_update(
+                        X_group, cov_xy, cov_y, cov_eps, Y, d
                     )
+                    # temp_storage[param_group.name] = smoother.update(
+                    #     temp_storage[param_group.name]
+                    # )
 
             progress_callback(Progress(Task("Storing data", 3, 3), None))
             _save_temp_storage_to_disk(target_fs, temp_storage, iens_active_index)
