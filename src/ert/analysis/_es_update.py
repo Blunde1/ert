@@ -675,16 +675,16 @@ def analysis_ES(
                 if active_indices := param_group.index_list:
                     X_group = temp_storage[param_group.name][active_indices, :]
                     temp_storage[param_group.name][active_indices, :] = ensemble_gaussian_update(
-                        X_group, cov_yx, cov_y, cov_eps, Y, d
-                    )
+                        X_group.T, cov_yx, cov_y, cov_eps, Y, d
+                    ).T
                     # temp_storage[param_group.name][active_indices, :] = smoother.update(
                     #     temp_storage[param_group.name][active_indices, :]
                     # )
                 else:
                     X_group = temp_storage[param_group.name]
                     temp_storage[param_group.name] = ensemble_gaussian_update(
-                        X_group, cov_yx, cov_y, cov_eps, Y, d
-                    )
+                        X_group.T, cov_yx, cov_y, cov_eps, Y, d
+                    ).T
                     # temp_storage[param_group.name] = smoother.update(
                     #     temp_storage[param_group.name]
                     # )
