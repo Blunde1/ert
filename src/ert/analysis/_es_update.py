@@ -461,12 +461,14 @@ def _parameter_ensemble(
     return np.vstack(matrices) if matrices else None
 
 
-def ensemble_gaussian_update(X, cov_xy, cov_y, cov_eps, Y, d):
+def ensemble_gaussian_update(X, cov_yx, cov_y, cov_eps, Y, d):
+    # X: nxp
+    # cov_yx: mxp
     X_tmp = X.copy()
     n = X_tmp.shape[0]
     p = X_tmp.shape[1]
     m = cov_eps.shape[0]
-    K = cov_xy @ np.linalg.inv(cov_y + cov_eps) # p x m
+    K = cov_yx @ np.linalg.inv(cov_y + cov_eps) # p x m
     for i in range(n):
         d_i = np.array([np.random.normal(loc=d[k], scale=np.sqrt(cov_eps[k,k])) for k in range(m)])
         X_tmp[i,:] = X_tmp[i,:] + K @ (Y[i:,] - d_i)
@@ -510,7 +512,7 @@ def compute_cross_covariance(coefficient_matrix, scaler):
     cov_x = np.eye(p) # gen_kw originally sampled from standard normal
     inv_sd = np.diag(1.0/scaler.scale_)
     H = inv_sd @ coefficient_matrix
-    return cov_x @ H
+    return H @ cov_x
 
 
 def analysis_ES(
@@ -579,7 +581,7 @@ def analysis_ES(
         cov_eps = np.diag(observation_errors)
         # learn cross-covariance
         coefficient_matrix, scaler = linear_l1_regression(X, Y)
-        cov_xy = compute_cross_covariance(coefficient_matrix, scaler)
+        cov_yx = compute_cross_covariance(coefficient_matrix, scaler)
 
         for param_group in update_step.parameters:
             source: Union[EnsembleReader, EnsembleAccessor]
@@ -673,7 +675,7 @@ def analysis_ES(
                 if active_indices := param_group.index_list:
                     X_group = temp_storage[param_group.name][active_indices, :]
                     temp_storage[param_group.name][active_indices, :] = ensemble_gaussian_update(
-                        X_group, cov_xy, cov_y, cov_eps, Y, d
+                        X_group, cov_yx, cov_y, cov_eps, Y, d
                     )
                     # temp_storage[param_group.name][active_indices, :] = smoother.update(
                     #     temp_storage[param_group.name][active_indices, :]
@@ -681,7 +683,7 @@ def analysis_ES(
                 else:
                     X_group = temp_storage[param_group.name]
                     temp_storage[param_group.name] = ensemble_gaussian_update(
-                        X_group, cov_xy, cov_y, cov_eps, Y, d
+                        X_group, cov_yx, cov_y, cov_eps, Y, d
                     )
                     # temp_storage[param_group.name] = smoother.update(
                     #     temp_storage[param_group.name]
