@@ -574,8 +574,8 @@ def analysis_ES(
         # input X, Y, d, eps
         X = _parameter_ensemble(
             source_fs, iens_active_index, param_groups
-        )
-        Y = S
+        ).T
+        Y = S.T
         d = observation_values
         cov_y = np.cov(Y)
         cov_eps = np.diag(observation_errors)
