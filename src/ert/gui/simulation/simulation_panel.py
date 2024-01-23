@@ -127,7 +127,14 @@ class SimulationPanel(QWidget):
         self._simulation_stack.addWidget(panel)
         simulation_model = panel.getSimulationModel()
         self._simulation_widgets[simulation_model] = panel
-        self._simulation_mode_combo.addItem(simulation_model.name(), simulation_model)
+        if simulation_model.name() == "Ensemble smoother":
+            self._simulation_mode_combo.addItem(
+                "LASSO (without structure)", simulation_model
+            )
+        else:
+            self._simulation_mode_combo.addItem(
+                simulation_model.name(), simulation_model
+            )
 
         if not mode_enabled:
             item_count = self._simulation_mode_combo.count() - 1

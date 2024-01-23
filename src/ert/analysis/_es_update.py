@@ -32,6 +32,7 @@ from ert.config import Field, GenKwConfig, SurfaceConfig
 from ..config.analysis_module import ESSettings, IESSettings
 from . import misfit_preprocessor
 from .event import AnalysisEvent, AnalysisStatusEvent, AnalysisTimeEvent
+from .linear_l1_regression import linear_l1_regression
 from .row_scaling import RowScaling
 from .update import RowScalingParameter
 
@@ -626,6 +627,9 @@ def analysis_ES(
             # Add identity in place for fast computation
             np.fill_diagonal(T, T.diagonal() + 1)
 
+            # For LASSO without structure
+            Y_noisy = S + rng.normal(0, observation_errors[:, np.newaxis], S.shape)
+
         for param_group in update_step.parameters:
             source: Union[EnsembleReader, EnsembleAccessor]
             if target_fs.has_parameter_group(param_group.name):
@@ -695,15 +699,41 @@ def analysis_ES(
                     # The batch of parameters
                     X_local = temp_storage[param_group.name][active_indices, :]
 
-                    # Update manually using global transition matrix T
-                    temp_storage[param_group.name][active_indices, :] = X_local @ T
+                    # Estimate Kalman gain
+                    K_lasso = linear_l1_regression(D=Y_noisy.T, X=X_local.T)
+
+                    X_local_posterior = X_local + K_lasso @ (
+                        observation_values - Y_noisy.T
+                    )
+
+                    temp_storage[param_group.name][
+                        active_indices, :
+                    ] = X_local_posterior
+                    print("THIS IS WORKING")
+
+                    # # # Update manually using global transition matrix T
+                    # temp_storage[param_group.name][active_indices, :] = X_local @ T
 
                 else:
                     # The batch of parameters
                     X_local = temp_storage[param_group.name]
 
-                    # Update manually using global transition matrix T
-                    temp_storage[param_group.name] = X_local @ T
+                    # Estimate Kalman gain
+                    K_lasso = linear_l1_regression(D=Y_noisy.T, X=X_local.T)
+
+                    observation_values_reshaped = observation_values[
+                        :, np.newaxis
+                    ]  # Reshape to (p, 1)
+
+                    X_local_posterior = X_local + K_lasso @ (
+                        observation_values_reshaped - Y_noisy
+                    )
+
+                    temp_storage[param_group.name] = X_local_posterior
+                    print("THIS IS WORKING")
+
+                    # # Update manually using global transition matrix T
+                    # temp_storage[param_group.name] = X_local @ T
 
             log_msg = f"Storing data for {param_group.name}.."
             _logger.info(log_msg)
