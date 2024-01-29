@@ -694,7 +694,7 @@ def analysis_ES(
                 )
 
             else:
-                # Use low-level ies API to allow looping over parameters
+                # Looping over parameters
                 if active_indices := param_group.index_list:
                     # The batch of parameters
                     X_local = temp_storage[param_group.name][active_indices, :]
@@ -702,8 +702,12 @@ def analysis_ES(
                     # Estimate Kalman gain
                     K_lasso = linear_l1_regression(D=Y_noisy.T, X=X_local.T)
 
+                    observation_values_reshaped = observation_values[
+                        :, np.newaxis
+                    ]  # Reshape to (p, 1)
+
                     X_local_posterior = X_local + K_lasso @ (
-                        observation_values - Y_noisy.T
+                        observation_values_reshaped - Y_noisy.T
                     )
 
                     temp_storage[param_group.name][
@@ -711,7 +715,7 @@ def analysis_ES(
                     ] = X_local_posterior
                     print("THIS IS WORKING")
 
-                    # # # Update manually using global transition matrix T
+                    # # Update manually using global transition matrix T
                     # temp_storage[param_group.name][active_indices, :] = X_local @ T
 
                 else:
