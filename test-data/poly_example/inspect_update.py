@@ -58,7 +58,7 @@ def create_waterfall_chart(data_array, parameter_name, nresponses, title=""):
 
 
 # Set up the title of the web app
-st.title("Parameter Update Analysis")
+st.title("Parameter Update Decompoisition")
 st.subheader("Using estimated Kalman-Gain")
 
 # Open storage
