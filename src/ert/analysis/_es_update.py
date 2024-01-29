@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import pickle
 import time
 from collections import UserDict
 from dataclasses import dataclass, field
@@ -338,6 +339,29 @@ def _get_obs_and_measure_data(
     )
 
 
+def _get_observation_names(
+    local_storage,
+    selected_observations: List[Tuple[str, Optional[List[int]]]],
+):
+    observation_names = []
+    observations = local_storage.experiment.observations
+    for obs_key, obs_active_list in selected_observations:
+        observation = observations[obs_key]
+        namespace = observation.attrs["response"]
+        if obs_active_list:
+            index = observation.coords.to_index()[obs_active_list]
+            sub_selection = {
+                name: list(set(index.get_level_values(name))) for name in index.names
+            }
+            observation = observation.sel(sub_selection)
+        # Column indices from observation.coords
+        column_indices = observation.coords["index"].values
+        # Construct column names by combining namespace with column indices
+        observation_names.append([f"{namespace}_{i}" for i in column_indices])
+    observation_names = [name for sublist in observation_names for name in sublist]
+    return observation_names
+
+
 def _load_observations_and_responses(
     source_fs: EnsembleReader,
     alpha: float,
@@ -630,6 +654,30 @@ def analysis_ES(
             # For LASSO without structure
             Y_noisy = S + rng.normal(0, observation_errors[:, np.newaxis], S.shape)
 
+            K_lasso_dict = {}
+            observation_names = _get_observation_names(
+                local_storage=source_fs,
+                selected_observations=update_step.observation_config(),
+            )
+            print(observation_names)
+
+            observation_values_reshaped = observation_values[
+                :, np.newaxis
+            ]  # Reshape to (p, 1)
+
+            # Assuming observation_values_reshaped and Y_noisy are defined
+            innovations = observation_values_reshaped - Y_noisy
+            average_innovations = np.mean(innovations, axis=1)  # Take average over rows
+
+            # Assuming observation_names is defined and matches the length of average_innovations
+            innovations_xr = xr.DataArray(
+                average_innovations, coords=[observation_names], dims=["observation"]
+            )
+
+            # Dump the xarray to innovations.pkl
+            with open("innovations.pkl", "wb") as file:
+                pickle.dump(innovations_xr, file)
+
         for param_group in update_step.parameters:
             source: Union[EnsembleReader, EnsembleAccessor]
             if target_fs.has_parameter_group(param_group.name):
@@ -639,6 +687,10 @@ def analysis_ES(
             temp_storage = _create_temporary_parameter_storage(
                 source, iens_active_index, param_group.name
             )
+
+            # open storage
+            # get names of parameters
+
             if module.localization:
                 num_params = temp_storage[param_group.name].shape[0]
 
@@ -736,6 +788,19 @@ def analysis_ES(
                     temp_storage[param_group.name] = X_local_posterior
                     print("THIS IS WORKING")
 
+                    # Store K_lasso
+                    row_names = (
+                        source.load_parameters(param_group.name).coords["names"].values
+                    )
+                    # row_names = param_group.coords['names'].values
+                    print(row_names)
+                    K_lasso_named = xr.DataArray(
+                        K_lasso,
+                        coords=[row_names, observation_names],
+                        dims=["names", "response_index"],
+                    )
+                    K_lasso_dict[param_group.name] = K_lasso_named
+
                     # # Update manually using global transition matrix T
                     # temp_storage[param_group.name] = X_local @ T
 
@@ -747,6 +812,11 @@ def analysis_ES(
             _logger.info(
                 f"Storing data for {param_group.name} completed in {(time.time() - start) / 60} minutes"
             )
+
+        # Open a file in binary-write mode
+        with open("K_lasso_full.pkl", "wb") as file:
+            # Use pickle to dump the K_lasso_full matrix into the file
+            pickle.dump(K_lasso_dict, file)
 
         _copy_unupdated_parameters(
             list(source_fs.experiment.parameter_configuration.keys()),
