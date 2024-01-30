@@ -8,6 +8,34 @@ import streamlit as st
 from ert.storage import open_storage
 
 
+def get_mean_update_size(
+    parameter_name, parameter_group_prior_ensemble, parameter_group_posterior_ensemble
+):
+    # Select the parameter ensemble for the specified parameter
+    parameter_prior_ensemble = parameter_group_prior_ensemble.sel(
+        names=parameter_name
+    ).transformed_values
+    parameter_posterior_ensemble = parameter_group_posterior_ensemble.sel(
+        names=parameter_name
+    ).transformed_values
+
+    # Standardize the samples
+    std_prior = parameter_prior_ensemble.std(dim="realizations")
+    std_posterior = parameter_posterior_ensemble.std(dim="realizations")
+
+    standardized_prior_ensemble = parameter_prior_ensemble / std_prior
+    standardized_posterior_ensemble = parameter_posterior_ensemble / std_posterior
+
+    # Calculate the mean of the standardized samples
+    mean_prior = standardized_prior_ensemble.mean(dim="realizations")
+    mean_posterior = standardized_posterior_ensemble.mean(dim="realizations")
+
+    # Compute the difference in means
+    update_size = abs(mean_posterior - mean_prior)
+
+    return update_size.item()  # Convert to a regular Python scalar if necessary
+
+
 def create_waterfall_chart(data_array, parameter_name, nresponses, title=""):
     # Extract data for the selected parameter and remove zeros
     parameter_data = data_array.sel(names=parameter_name).values
@@ -108,6 +136,11 @@ if "K_lasso_param_groups" in locals() and K_lasso_param_groups:
         "Select Parameter Group", param_group_names
     )
 
+    parameter_group_prior_ensemble = storage_prior.load_parameters(selected_param_group)
+    parameter_group_posterior_ensemble = storage_posterior.load_parameters(
+        selected_param_group
+    )
+
     # If a parameter group is selected, create selection for "parameter_name"
     if selected_param_group:
         # Extract parameter names for the selected parameter group
@@ -115,10 +148,33 @@ if "K_lasso_param_groups" in locals() and K_lasso_param_groups:
             K_lasso_param_groups[selected_param_group].coords["names"].values.tolist()
         )
 
+        sort_criterion = st.sidebar.radio(
+            "Sort Parameters By",
+            options=["Name", "Update Size"],
+            index=0,  # Default to sorting by name
+        )
+
+        # Sort parameter_names based on the selected criterion
+        if sort_criterion == "Name":
+            sorted_parameter_names = sorted(parameter_names)
+        elif sort_criterion == "Update Size":
+            # Sort parameter_names by update size
+            sorted_parameter_names = sorted(
+                parameter_names,
+                key=lambda x: get_mean_update_size(
+                    x,
+                    parameter_group_prior_ensemble,
+                    parameter_group_posterior_ensemble,
+                ),
+                reverse=True,
+            )
+
         # Sidebar for selecting a parameter name
         selected_parameter_name = st.sidebar.selectbox(
-            "Select Parameter Name", parameter_names
+            "Select Parameter Name", sorted_parameter_names
         )
+
+        # st.write(f"Update size of selected param{get_mean_update_size(selected_parameter_name, parameter_group_prior_ensemble, parameter_group_posterior_ensemble)}")
 
         # Display the selected parameter name
         # st.write(f"Selected Parameter Name: {selected_parameter_name}")
@@ -140,16 +196,12 @@ except Exception as e:
 
 
 # Get prior and posterior samples for parameter
-parameter_prior_ensemble = (
-    storage_prior.load_parameters(selected_param_group)
-    .sel(names=selected_parameter_name)
-    .transformed_values
-)
-parameter_posterior_ensemble = (
-    storage_posterior.load_parameters(selected_param_group)
-    .sel(names=selected_parameter_name)
-    .transformed_values
-)
+parameter_prior_ensemble = parameter_group_prior_ensemble.sel(
+    names=selected_parameter_name
+).transformed_values
+parameter_posterior_ensemble = parameter_group_posterior_ensemble.sel(
+    names=selected_parameter_name
+).transformed_values
 
 # Create two columns for the plots
 col1, col2 = st.columns(2)
