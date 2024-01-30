@@ -139,6 +139,42 @@ except Exception as e:
     st.error(f"Failed to load average innovations: {e}")
 
 
+# Get prior and posterior samples for parameter
+parameter_prior_ensemble = (
+    storage_prior.load_parameters(selected_param_group)
+    .sel(names=selected_parameter_name)
+    .transformed_values
+)
+parameter_posterior_ensemble = (
+    storage_posterior.load_parameters(selected_param_group)
+    .sel(names=selected_parameter_name)
+    .transformed_values
+)
+
+# Create two columns for the plots
+col1, col2 = st.columns(2)
+
+# Plot histogram or KDE for Prior Parameter Ensemble in the first column
+with col1:
+    fig = px.histogram(
+        x=parameter_prior_ensemble.values,
+        marginal="violin",  # Or 'rug', 'box', etc.
+        # nbins=20,  # Adjust number of bins as necessary
+        title="Prior Ensemble",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+# Plot histogram with KDE for Posterior Parameter Ensemble in the second column
+with col2:
+    fig = px.histogram(
+        x=parameter_posterior_ensemble.values,
+        marginal="violin",  # Or 'rug', 'box', etc.
+        # nbins=20,  # Adjust number of bins as necessary
+        title="Posterior Ensemble",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
 # Scale K_lasso_xr by the aligned average innovations
 K_lasso_xr = K_lasso_param_groups[selected_param_group]
 K_lasso_xr_scaled = K_lasso_xr * innovations_xr.values
