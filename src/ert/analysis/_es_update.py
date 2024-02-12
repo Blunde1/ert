@@ -619,13 +619,13 @@ def analysis_ES(
                 f"Specified: {module.ies_inversion}, with possible: {inversion_types}"
             ) from e
 
-        smoother_es = ies.ESMDA(
-            covariance=observation_errors**2,
-            observations=observation_values,
-            alpha=1,  # The user is responsible for scaling observation covariance (esmda usage)
-            seed=rng,
-            inversion=inversion_type,
-        )
+        # smoother_es = ies.ESMDA(
+        #     covariance=observation_errors**2,
+        #     observations=observation_values,
+        #     alpha=1,  # The user is responsible for scaling observation covariance (esmda usage)
+        #     seed=rng,
+        #     inversion=inversion_type,
+        # )
         truncation = module.enkf_truncation
 
         if module.localization:
@@ -643,13 +643,13 @@ def analysis_ES(
             )
 
         else:
-            # Compute transition matrix so that
-            # X_posterior = X_prior @ T
-            T = smoother_es.compute_transition_matrix(
-                Y=S, alpha=1.0, truncation=truncation
-            )
-            # Add identity in place for fast computation
-            np.fill_diagonal(T, T.diagonal() + 1)
+            # # Compute transition matrix so that
+            # # X_posterior = X_prior @ T
+            # T = smoother_es.compute_transition_matrix(
+            #     Y=S, alpha=1.0, truncation=truncation
+            # )
+            # # Add identity in place for fast computation
+            # np.fill_diagonal(T, T.diagonal() + 1)
 
             # For LASSO without structure
             Y_noisy = S + rng.normal(0, observation_errors[:, np.newaxis], S.shape)
@@ -766,6 +766,21 @@ def analysis_ES(
                         active_indices, :
                     ] = X_local_posterior
                     print("THIS IS WORKING")
+
+                    # Store K_lasso
+                    row_names = (
+                        source.load_parameters(param_group.name)
+                        .coords["names"]
+                        .values[active_indices]
+                    )
+                    # row_names = param_group.coords['names'].values
+                    print(row_names)
+                    K_lasso_named = xr.DataArray(
+                        K_lasso,
+                        coords=[row_names, observation_names],
+                        dims=["names", "response_index"],
+                    )
+                    K_lasso_dict[param_group.name] = K_lasso_named
 
                     # # Update manually using global transition matrix T
                     # temp_storage[param_group.name][active_indices, :] = X_local @ T
