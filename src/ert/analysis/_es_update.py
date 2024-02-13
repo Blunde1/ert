@@ -357,9 +357,15 @@ def _get_observation_names(
             observation = observation.sel(sub_selection)
         # Column indices from observation.coords
         print(f"Available coordinates for observation '{obs_key}':", observation.coords)
-        column_indices = observation.coords["index"].values
-        # Construct column names by combining namespace with column indices
-        observation_names.append([f"{namespace}_{i}" for i in column_indices])
+        if "index" in observation.coords:
+            print("This is GEN data")
+            observation_index = observation.coords["index"].values
+            # Construct column names by combining namespace with column indices
+            observation_names.append([f"{namespace}_{i}" for i in observation_index])
+        else:
+            print("This is summary data. One name one value")
+            observation_names.append(namespace)
+
     observation_names = [name for sublist in observation_names for name in sublist]
     return observation_names
 
