@@ -367,7 +367,7 @@ def _get_observation_names(
             )
         else:
             print("This is summary data. One name one value")
-            observation_names.append([observation_name])
+            observation_names.append([obs_key])
 
     observation_names = [name for sublist in observation_names for name in sublist]
     return observation_names
