@@ -575,12 +575,15 @@ def analysis_ES(
     progress_callback: Callable[[AnalysisEvent], None],
     misfit_process: bool,
 ) -> None:
+    print("Running analysis_ES")
+
     iens_active_index = np.flatnonzero(ens_mask)
 
     ensemble_size = ens_mask.sum()
     updated_parameter_groups = []
 
     for update_step in updatestep:
+        print(f"Running update step: {update_step.name}")
         updated_parameter_groups.extend(
             [param_group.name for param_group in update_step.parameters]
         )
@@ -588,6 +591,8 @@ def analysis_ES(
         progress_callback(
             AnalysisStatusEvent(msg="Loading observations and responses..")
         )
+
+        print("Obtaining responses and observations")
         (
             S,
             (
@@ -652,6 +657,7 @@ def analysis_ES(
             # np.fill_diagonal(T, T.diagonal() + 1)
 
             # For LASSO without structure
+            print("Fetching values for LASSO: Y_noisy, names for observations")
             Y_noisy = S + rng.normal(0, observation_errors[:, np.newaxis], S.shape)
 
             K_lasso_dict = {}
@@ -665,6 +671,7 @@ def analysis_ES(
                 :, np.newaxis
             ]  # Reshape to (p, 1)
 
+            print("Dumping average innovations")
             # Assuming observation_values_reshaped and Y_noisy are defined
             innovations = observation_values_reshaped - Y_noisy
             average_innovations = np.mean(innovations, axis=1)  # Take average over rows
@@ -679,6 +686,8 @@ def analysis_ES(
                 pickle.dump(innovations_xr, file)
 
         for param_group in update_step.parameters:
+            print(f"Running param group: {param_group.name}")
+
             source: Union[EnsembleReader, EnsembleAccessor]
             if target_fs.has_parameter_group(param_group.name):
                 source = target_fs
@@ -746,8 +755,10 @@ def analysis_ES(
                 )
 
             else:
+                print("Running LASSOA")
                 # Looping over parameters
                 if active_indices := param_group.index_list:
+                    print("We have active index list")
                     # The batch of parameters
                     X_local = temp_storage[param_group.name][active_indices, :]
 
@@ -787,6 +798,7 @@ def analysis_ES(
 
                 else:
                     # The batch of parameters
+                    print("We do not have active index list")
                     X_local = temp_storage[param_group.name]
 
                     # Estimate Kalman gain
