@@ -677,6 +677,7 @@ def analysis_ES(
                 selected_observations=update_step.observation_config(),
             )
             print(f"Number of observation names: {len(observation_names)}")
+            print(observation_names)
 
             observation_values_reshaped = observation_values[
                 :, np.newaxis
@@ -686,6 +687,7 @@ def analysis_ES(
             # Assuming observation_values_reshaped and Y_noisy are defined
             innovations = observation_values_reshaped - Y_noisy
             average_innovations = np.mean(innovations, axis=1)  # Take average over rows
+            print(f"Innovations has shape {average_innovations.shape}")
 
             # Assuming observation_names is defined and matches the length of average_innovations
             innovations_xr = xr.DataArray(
