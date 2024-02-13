@@ -343,6 +343,7 @@ def _get_observation_names(
     local_storage,
     selected_observations: List[Tuple[str, Optional[List[int]]]],
 ):
+    print("Get observation names")
     observation_names = []
     observations = local_storage.experiment.observations
     for obs_key, obs_active_list in selected_observations:
@@ -355,6 +356,7 @@ def _get_observation_names(
             }
             observation = observation.sel(sub_selection)
         # Column indices from observation.coords
+        print(f"Available coordinates for observation '{obs_key}':", observation.coords)
         column_indices = observation.coords["index"].values
         # Construct column names by combining namespace with column indices
         observation_names.append([f"{namespace}_{i}" for i in column_indices])
