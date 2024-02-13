@@ -348,7 +348,8 @@ def _get_observation_names(
     observations = local_storage.experiment.observations
     for obs_key, obs_active_list in selected_observations:
         observation = observations[obs_key]
-        namespace = observation.attrs["response"]
+        observation_name = observation.attrs["response"]
+        print(observation_name)
         if obs_active_list:
             index = observation.coords.to_index()[obs_active_list]
             sub_selection = {
@@ -361,10 +362,12 @@ def _get_observation_names(
             print("This is GEN data")
             observation_index = observation.coords["index"].values
             # Construct column names by combining namespace with column indices
-            observation_names.append([f"{namespace}_{i}" for i in observation_index])
+            observation_names.append(
+                [f"{observation_name}_{i}" for i in observation_index]
+            )
         else:
             print("This is summary data. One name one value")
-            observation_names.append(namespace)
+            observation_names.append(observation_name)
 
     observation_names = [name for sublist in observation_names for name in sublist]
     return observation_names
@@ -673,7 +676,7 @@ def analysis_ES(
                 local_storage=source_fs,
                 selected_observations=update_step.observation_config(),
             )
-            print(observation_names)
+            print(f"Number of observation names: {len(observation_names)}")
 
             observation_values_reshaped = observation_values[
                 :, np.newaxis
