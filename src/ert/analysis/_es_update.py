@@ -323,6 +323,7 @@ def _get_obs_and_measure_data(
             ) from e
 
         observation_keys.append([obs_key] * len(filtered_ds.observations.data.ravel()))
+        print(observation_keys)
         observation_values.append(filtered_ds["observations"].data.ravel())
         observation_errors.append(filtered_ds["std"].data.ravel())
         measured_data.append(
@@ -340,9 +341,9 @@ def _get_obs_and_measure_data(
 
 
 def _get_observation_names(
-    local_storage,
+    local_storage: EnsembleReader,
     selected_observations: List[Tuple[str, Optional[List[int]]]],
-):
+) -> npt.NDArray[np.str_]:
     print("Get observation names")
     observation_names = []
     observations = local_storage.experiment.observations
@@ -370,7 +371,7 @@ def _get_observation_names(
             observation_names.append([obs_key])
 
     observation_names = [name for sublist in observation_names for name in sublist]
-    return observation_names
+    return np.array(observation_names, dtype=np.str_)
 
 
 def _load_observations_and_responses(
@@ -389,11 +390,17 @@ def _load_observations_and_responses(
         npt.NDArray[np.float_],
         List[ObservationAndResponseSnapshot],
     ],
+    npt.NDArray[np.str_],
 ]:
     S, observations, errors, obs_keys = _get_obs_and_measure_data(
         source_fs,
         selected_observations,
         iens_ative_index,
+    )
+
+    observation_names = _get_observation_names(
+        local_storage=source_fs,
+        selected_observations=selected_observations,
     )
 
     # Inflating measurement errors by a factor sqrt(global_std_scaling) as shown
@@ -456,10 +463,14 @@ def _load_observations_and_responses(
             f"No active observations for update step: {update_step_name}"
         )
 
-    return S[obs_mask], (
-        observations[obs_mask],
-        scaled_errors[obs_mask],
-        update_snapshot,
+    return (
+        S[obs_mask],
+        (
+            observations[obs_mask],
+            scaled_errors[obs_mask],
+            update_snapshot,
+        ),
+        observation_names[obs_mask],
     )
 
 
@@ -611,6 +622,7 @@ def analysis_ES(
                 observation_errors,
                 update_snapshot,
             ),
+            observation_names,
         ) = _load_observations_and_responses(
             source_fs,
             alpha,
@@ -672,12 +684,12 @@ def analysis_ES(
             Y_noisy = S + rng.normal(0, observation_errors[:, np.newaxis], S.shape)
 
             K_lasso_dict = {}
-            observation_names = _get_observation_names(
-                local_storage=source_fs,
-                selected_observations=update_step.observation_config(),
-            )
+            # observation_names = _get_observation_names(
+            #     local_storage=source_fs,
+            #     selected_observations=update_step.observation_config(),
+            # )
             print(f"Number of observation names: {len(observation_names)}")
-            print(observation_names)
+            # print(observation_names)
 
             observation_values_reshaped = observation_values[
                 :, np.newaxis
@@ -768,7 +780,7 @@ def analysis_ES(
                 )
 
             else:
-                print("Running LASSOA")
+                print("Running LASSO")
                 # Looping over parameters
                 if active_indices := param_group.index_list:
                     print("We have active index list")
@@ -938,6 +950,7 @@ def analysis_IES(
                 observation_errors,
                 update_snapshot,
             ),
+            _,
         ) = _load_observations_and_responses(
             source_fs,
             alpha,
