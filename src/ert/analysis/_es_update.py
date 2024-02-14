@@ -258,6 +258,7 @@ def _create_temporary_parameter_storage(
     iens_active_index: npt.NDArray[np.int_],
     param_group: str,
 ) -> TempStorage:
+    print("Creating temporary storage")
     temp_storage = TempStorage()
     t_genkw = 0.0
     t_surface = 0.0
@@ -286,6 +287,7 @@ def _create_temporary_parameter_storage(
         f"_create_temporary_parameter_storage() time_used gen_kw={t_genkw:.4f}s, \
                 surface={t_surface:.4f}s, field={t_field:.4f}s"
     )
+    print("Finished creating temporary storage")
     return temp_storage
 
 
@@ -866,6 +868,7 @@ def analysis_ES(
             )
 
         # Open a file in binary-write mode
+        print("Dumping LASSO Kalman gain")
         with open("K_lasso_full.pkl", "wb") as file:
             # Use pickle to dump the K_lasso_full matrix into the file
             pickle.dump(K_lasso_dict, file)
