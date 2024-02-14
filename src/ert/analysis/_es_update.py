@@ -229,6 +229,7 @@ def _save_temp_storage_to_disk(
     temp_storage: TempStorage,
     iens_active_index: npt.NDArray[np.int_],
 ) -> None:
+    print("Save temporary storage to disk")
     for key, matrix in temp_storage.items():
         config_node = target_fs.experiment.parameter_configuration[key]
         for i, realization in enumerate(iens_active_index):
@@ -858,6 +859,7 @@ def analysis_ES(
                     # # Update manually using global transition matrix T
                     # temp_storage[param_group.name] = X_local @ T
 
+            print("Storing data for {param_group.name}..")
             log_msg = f"Storing data for {param_group.name}.."
             _logger.info(log_msg)
             progress_callback(AnalysisStatusEvent(msg=log_msg))
