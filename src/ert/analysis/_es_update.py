@@ -859,7 +859,7 @@ def analysis_ES(
                     # # Update manually using global transition matrix T
                     # temp_storage[param_group.name] = X_local @ T
 
-            print("Storing data for {param_group.name}..")
+            print(f"Storing data for {param_group.name}..")
             log_msg = f"Storing data for {param_group.name}.."
             _logger.info(log_msg)
             progress_callback(AnalysisStatusEvent(msg=log_msg))

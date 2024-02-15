@@ -4,7 +4,7 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 
-def linear_l1_regression(D, X):
+def linear_l1_regression(D, X, max_iter=100, cv_folds=5):
     """
     Performs LASSO regression for each response in X against predictors in D,
     constructing a sparse matrix of regression coefficients.
@@ -52,8 +52,7 @@ def linear_l1_regression(D, X):
 
         # Learn individual regularization and fit
         eps = 1e-3
-        max_iter = 10000
-        model_cv = LassoCV(cv=10, fit_intercept=False, max_iter=max_iter, eps=eps)
+        model_cv = LassoCV(cv=cv_folds, fit_intercept=False, max_iter=max_iter, eps=eps)
         model_cv.fit(D_scaled, x_j)
 
         # Extract coefficients
