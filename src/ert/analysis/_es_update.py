@@ -33,7 +33,7 @@ from ert.config import Field, GenKwConfig, SurfaceConfig
 from ..config.analysis_module import ESSettings, IESSettings
 from . import misfit_preprocessor
 from .event import AnalysisEvent, AnalysisStatusEvent, AnalysisTimeEvent
-from .linear_l1_regression import linear_l1_regression
+from .linear_l1_regression import linear_boost_ic_regression
 from .row_scaling import RowScaling
 from .update import RowScalingParameter
 
@@ -791,7 +791,9 @@ def analysis_ES(
                     X_local = temp_storage[param_group.name][active_indices, :]
 
                     # Estimate Kalman gain
-                    K_lasso = linear_l1_regression(D=Y_noisy.T, X=X_local.T)
+                    # K_lasso = linear_l1_regression(D=Y_noisy.T, X=X_local.T)
+                    # This is an approximate l1 regularization path
+                    K_lasso = linear_boost_ic_regression(D=Y_noisy.T, X=X_local.T)
 
                     observation_values_reshaped = observation_values[
                         :, np.newaxis
@@ -830,7 +832,9 @@ def analysis_ES(
                     X_local = temp_storage[param_group.name]
 
                     # Estimate Kalman gain
-                    K_lasso = linear_l1_regression(D=Y_noisy.T, X=X_local.T)
+                    # K_lasso = linear_l1_regression(D=Y_noisy.T, X=X_local.T)
+                    # This is an approximate l1 regularization path
+                    K_lasso = linear_boost_ic_regression(D=Y_noisy.T, X=X_local.T)
 
                     observation_values_reshaped = observation_values[
                         :, np.newaxis
