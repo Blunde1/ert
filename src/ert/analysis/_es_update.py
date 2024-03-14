@@ -150,6 +150,7 @@ class TempStorage(UserDict):  # type: ignore
         if not isinstance(value, xr.DataArray):
             return value
         ensemble_size = len(value.realizations)
+        print(f"getitem: Parameter group {key} has shape {value.values.shape}")
         return value.values.reshape(ensemble_size, -1).T
 
     def __setitem__(
@@ -161,6 +162,7 @@ class TempStorage(UserDict):  # type: ignore
             old_value.data = value.T.reshape(*old_value.shape)
             self.data[key] = old_value
         else:
+            print(f"Parameter group {key} has shape {value.shape}")
             self.data[key] = value
 
 
