@@ -157,6 +157,7 @@ class TempStorage(UserDict):  # type: ignore
     ) -> None:
         old_value = self.data.get(key)
         if isinstance(old_value, xr.DataArray):
+            print(f"Parameter group {key} has shape {old_value.shape}")
             old_value.data = value.T.reshape(*old_value.shape)
             self.data[key] = old_value
         else:
