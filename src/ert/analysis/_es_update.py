@@ -201,6 +201,20 @@ def _create_temporary_parameter_storage(
 ) -> TempStorage:
     temp_storage = TempStorage()
     config_node = ensemble.experiment.parameter_configuration[param_group]
+
+    ####
+    prior_xdata = ensemble.load_parameters(param_group)
+    print(f"prior_xdata shape: {prior_xdata.shape}")
+    print(f"prior_xdata: {prior_xdata.coords}")
+    print(f"prior_xdata: {prior_xdata.dims}")
+    # print(f"prior_xdata values: {prior_xdata["values"].shape}")
+    # es_prior = storage.get_ensemble_by_name("es_prior")
+    # es_prior_xdata = es_prior.load_parameters("FIELDPAR").sel(
+    #     realizations=realization
+    # )
+    # es_prior_values_from_storage = es_prior_xdata["values"].values
+    ####
+
     temp_storage[param_group] = config_node.load_parameters(
         ensemble, param_group, iens_active_index
     )
