@@ -205,14 +205,10 @@ def _create_temporary_parameter_storage(
     ####
     prior_xdata = ensemble.load_parameters(param_group)
     values_shape = prior_xdata["values"].shape
+    print(f"prior_xdata type: {type(prior_xdata)}")
     print(f"prior_xdata: {prior_xdata.coords}")
     print(f"prior_xdata: {prior_xdata.dims}")
     print(f"prior_xdata values: {values_shape}")
-    # es_prior = storage.get_ensemble_by_name("es_prior")
-    # es_prior_xdata = es_prior.load_parameters("FIELDPAR").sel(
-    #     realizations=realization
-    # )
-    # es_prior_values_from_storage = es_prior_xdata["values"].values
     ####
 
     temp_storage[param_group] = config_node.load_parameters(
