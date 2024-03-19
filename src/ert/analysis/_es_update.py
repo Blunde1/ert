@@ -22,6 +22,7 @@ from typing import (
 )
 
 import iterative_ensemble_smoother as ies
+import networkx as nx
 import numpy as np
 import psutil
 import xarray as xr
@@ -181,6 +182,60 @@ def _all_parameters(
         temp_storage[param_group] = _temp_storage[param_group]
     matrices = [temp_storage[p] for p in param_groups]
     return np.vstack(matrices) if matrices else None
+
+
+def combine_graphs(G1, G2):
+    """
+    Combine two graphs, G1 and G2, into a single graph.
+    Node labels in G2 are re-labelled starting from the maximum label in G1 + 1.
+
+    Parameters:
+    - G1: First graph
+    - G2: Second graph to add to the first, with node labels re-labelled
+
+    Returns:
+    - The combined graph
+    """
+    # Avoid modifying the original graph
+    combined_graph = G1.copy()
+
+    # Starting point for re-labelling G2's nodes
+    start_label = len(G1)
+
+    # Relabel nodes in G2 with new labels
+    mapping = {node: node + start_label for node in G2.nodes()}
+    relabelled_G2 = nx.relabel_nodes(G2, mapping)
+
+    # Add the relabelled G2 to the combined graph
+    combined_graph = nx.compose(combined_graph, relabelled_G2)
+
+    return combined_graph
+
+
+def _parameter_graph(
+    ensemble: Ensemble,
+    iens_active_index: npt.NDArray[np.int_],
+    param_groups: List[str],
+) -> nx.Graph:
+    """Graph describing conditional dependence among all parameters."""
+
+    # Add sub-graphs iteratively to the full graph
+    parameter_graph = nx.Graph()
+    for param_group in param_groups:
+        print(f"Adding graph from parameter: {param_group}")
+        config_node = ensemble.experiment.parameter_configuration[param_group]
+        sub_graph = config_node.load_parameter_graph(
+            ensemble, param_group, iens_active_index
+        )
+        print(
+            f"sub-graph nodes: {len(list(sub_graph.nodes))} and edges {len(list(sub_graph.edges))}"
+        )
+        parameter_graph = combine_graphs(parameter_graph, sub_graph)
+
+    print(
+        f"Full-graph nodes: {len(list(parameter_graph.nodes))} and edges {len(list(parameter_graph.edges))}"
+    )
+    return parameter_graph
 
 
 def _save_temp_storage_to_disk(
@@ -539,6 +594,17 @@ def analysis_ES(
         np.fill_diagonal(T, T.diagonal() + 1)
 
         # Load all parameters _and_ graphs at the same time
+        param_groups = list(source_ensemble.experiment.parameter_configuration.keys())
+        # maybe the same as list(parameters)?
+        print(list(parameters) == param_groups)
+        parameter_graph = _parameter_graph(
+            ensemble=source_ensemble,
+            iens_active_index=iens_active_index,
+            param_groups=param_groups,
+        )
+        print(
+            f"Full-graph nodes 2: {len(list(parameter_graph.nodes))} and edges {len(list(parameter_graph.edges))}"
+        )
 
     for param_group in parameters:
         source = source_ensemble
