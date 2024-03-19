@@ -595,16 +595,22 @@ def analysis_ES(
 
         # Load all parameters _and_ graphs at the same time
         param_groups = list(source_ensemble.experiment.parameter_configuration.keys())
-        # maybe the same as list(parameters)?
-        print(list(parameters) == param_groups)
-        parameter_graph = _parameter_graph(
+        X_full = _all_parameters(
             ensemble=source_ensemble,
             iens_active_index=iens_active_index,
             param_groups=param_groups,
         )
-        print(
-            f"Full-graph nodes 2: {len(list(parameter_graph.nodes))} and edges {len(list(parameter_graph.edges))}"
-        )
+        print(f"full parameter matrix shape: {X_full.shape}")
+        # # maybe the same as list(parameters)?
+        # print(list(parameters) == param_groups)
+        # parameter_graph = _parameter_graph(
+        #     ensemble=source_ensemble,
+        #     iens_active_index=iens_active_index,
+        #     param_groups=param_groups,
+        # )
+        # print(
+        #     f"Full-graph nodes 2: {len(list(parameter_graph.nodes))} and edges {len(list(parameter_graph.edges))}"
+        # )
 
     for param_group in parameters:
         source = source_ensemble
@@ -639,8 +645,11 @@ def analysis_ES(
             )
 
         else:
+            print("Not doing localization")
             # The batch of parameters
             X_local = temp_storage[param_group]
+
+            # Estimate precision matrix
 
             # Update manually using global transition matrix T
             temp_storage[param_group] = X_local @ T
