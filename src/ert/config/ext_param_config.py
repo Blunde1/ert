@@ -9,8 +9,6 @@ import networkx as nx
 import numpy as np
 import xarray as xr
 
-from ert.storage import Ensemble
-
 from .parameter_config import ParameterConfig
 
 if TYPE_CHECKING:
