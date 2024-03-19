@@ -8,6 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Optional, Union, overload
 
+import networkx as nx
 import numpy as np
 import xarray as xr
 from typing_extensions import Self
@@ -25,6 +26,77 @@ if TYPE_CHECKING:
     from ert.storage import Ensemble
 
 _logger = logging.getLogger(__name__)
+
+
+def create_flattened_cube_graph(px: int, py: int, pz: int) -> nx.Graph:
+    """graph created with nodes numbered from 0 to px*py*pz
+    corresponds to the "vectorization" or flattening of
+    a 3D cube with shape (px,py,pz) in the same way as
+    reshaping such a cube into a one-dimensional array.
+    The indexing scheme used to create the graph reflects
+    this flattening process"""
+
+    G = nx.Graph()
+    for x in range(px):
+        for y in range(py):
+            for z in range(pz):
+                # Flatten the 3D index to a single index
+                index = x * py * pz + y * pz + z
+
+                # Connect to the right neighbor (y-direction)
+                if y < py - 1:
+                    G.add_edge(index, index + pz)
+
+                # Connect to the bottom neighbor (x-direction)
+                if x < px - 1:
+                    G.add_edge(index, index + py * pz)
+
+                # Connect to the neighbor in front (z-direction)
+                if z < pz - 1:
+                    G.add_edge(index, index + 1)
+
+    return G
+
+
+def adjust_graph_for_masking(G: nx.Graph, mask_indices: npt.NDArray[np.int_]):
+    """
+    Adjust the graph G according to the masking indices.
+    For each masked index, its neighbors become neighbors of each other,
+    then the masked index is removed from the graph. After each removal,
+    nodes with an index greater than the removed node are decremented by 1.
+
+    Parameters:
+    - G: The graph to adjust
+    - mask_indices: Indices to mask, assumed to be sorted in ascending order
+
+    Returns:
+    - The adjusted graph
+    """
+    removed_count = 0
+
+    for i in mask_indices:
+        # Adjust i for the number of removals to get the current index in the graph
+        current_index = i - removed_count
+        neighbors = list(G.neighbors(current_index))
+
+        # Make neighbors of the current node neighbors of each other
+        for u in neighbors:
+            for v in neighbors:
+                if u != v and not G.has_edge(u, v):
+                    G.add_edge(u, v)
+
+        # Remove the current node
+        G.remove_node(current_index)
+
+        # Decrement indices of nodes greater than the current node
+        mapping = {
+            node: (node - 1 if node > current_index else node) for node in G.nodes()
+        }
+        nx.relabel_nodes(G, mapping, copy=False)
+
+        removed_count += 1
+
+    return G
 
 
 @dataclass
@@ -208,6 +280,16 @@ class Field(ParameterConfig):
             ]
         )
         return da.T.to_numpy()
+
+    def load_parameter_graph(
+        self, ensemble: Ensemble, group: str, realizations: npt.NDArray[np.int_]
+    ) -> nx.Graph:  # type: ignore
+        parameter_graph = create_flattened_cube_graph(
+            px=self.nx, py=self.ny, pz=self.nz
+        )
+        return adjust_graph_for_masking(
+            G=parameter_graph, mask_indices=np.where(self.mask)[0]
+        )
 
     def _fetch_from_ensemble(self, real_nr: int, ensemble: Ensemble) -> xr.DataArray:
         da = ensemble.load_parameters(self.name, real_nr)["values"]

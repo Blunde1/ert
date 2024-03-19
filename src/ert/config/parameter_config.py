@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
+import networkx as nx
 import numpy as np
 import xarray as xr
 
@@ -103,6 +104,15 @@ class ParameterConfig(ABC):
     ) -> Union[npt.NDArray[np.float_], xr.DataArray]:
         """
         Load the parameter from internal storage for the given ensemble
+        """
+
+    @abstractmethod
+    def load_parameter_graph(
+        self, ensemble: Ensemble, group: str, realizations: npt.NDArray[np.int_]
+    ) -> nx.Graph:
+        """
+        Load the graph encoding Markov properties on the parameter `group`
+        Often a neighbourhood graph.
         """
 
     def to_dict(self) -> Dict[str, Any]:

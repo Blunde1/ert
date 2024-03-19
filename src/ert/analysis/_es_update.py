@@ -209,6 +209,9 @@ def _create_temporary_parameter_storage(
     print(f"prior_xdata: {prior_xdata.coords}")
     print(f"prior_xdata: {prior_xdata.dims}")
     print(f"prior_xdata values: {values_shape}")
+    graph = config_node.load_parameter_graph(ensemble, param_group, iens_active_index)
+    print(f"graph nodes: {len(list(graph.nodes))}")
+    print(f"graph edges: {len(list(graph.edges))}")
     ####
 
     temp_storage[param_group] = config_node.load_parameters(
@@ -534,6 +537,8 @@ def analysis_ES(
         T = smoother_es.compute_transition_matrix(Y=S, alpha=1.0, truncation=truncation)
         # Add identity in place for fast computation
         np.fill_diagonal(T, T.diagonal() + 1)
+
+        # Load all parameters _and_ graphs at the same time
 
     for param_group in parameters:
         source = source_ensemble
