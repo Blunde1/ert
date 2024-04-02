@@ -604,6 +604,14 @@ def analysis_ES(
         )
         print(f"full parameter matrix shape: {X_full.shape}")
 
+        # Precision of observation errors
+        Prec_eps = sp.sparse.diags(
+            1.0 / observation_errors**2,
+            offsets=[0],
+            shape=(num_obs, num_obs),
+            format="csc",
+        )
+
         print(list(parameters) == param_groups)
         parameter_graph = _parameter_graph(
             ensemble=source_ensemble,
@@ -612,14 +620,6 @@ def analysis_ES(
         )
         print(
             f"Full-graph nodes 2: {len(list(parameter_graph.nodes))} and edges {len(list(parameter_graph.edges))}"
-        )
-
-        # Precision of observation errors
-        Prec_eps = sp.sparse.diags(
-            1.0 / observation_errors**2,
-            offsets=[0],
-            shape=(num_obs, num_obs),
-            format="csc",
         )
 
         # Create the EnIF object
