@@ -606,7 +606,7 @@ def analysis_ES(
 
         # Precision of observation errors
         Prec_eps = sp.sparse.diags(
-            1.0 / observation_errors**2,
+            [1.0 / observation_errors**2],
             offsets=[0],
             shape=(num_obs, num_obs),
             format="csc",
