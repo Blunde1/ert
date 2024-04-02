@@ -264,9 +264,9 @@ def _create_temporary_parameter_storage(
     print(f"prior_xdata: {prior_xdata.coords}")
     print(f"prior_xdata: {prior_xdata.dims}")
     print(f"prior_xdata values: {values_shape}")
-    graph = config_node.load_parameter_graph(ensemble, param_group, iens_active_index)
-    print(f"graph nodes: {len(list(graph.nodes))}")
-    print(f"graph edges: {len(list(graph.edges))}")
+    # graph = config_node.load_parameter_graph(ensemble, param_group, iens_active_index)
+    # print(f"graph nodes: {len(list(graph.nodes))}")
+    # print(f"graph edges: {len(list(graph.edges))}")
     ####
 
     temp_storage[param_group] = config_node.load_parameters(
@@ -601,16 +601,23 @@ def analysis_ES(
             param_groups=param_groups,
         )
         print(f"full parameter matrix shape: {X_full.shape}")
-        # # maybe the same as list(parameters)?
-        # print(list(parameters) == param_groups)
-        # parameter_graph = _parameter_graph(
-        #     ensemble=source_ensemble,
-        #     iens_active_index=iens_active_index,
-        #     param_groups=param_groups,
-        # )
-        # print(
-        #     f"Full-graph nodes 2: {len(list(parameter_graph.nodes))} and edges {len(list(parameter_graph.edges))}"
-        # )
+
+        # parameter_count = 0
+
+        # Estimate sparse linear map
+
+        # Remove X_full
+
+        # maybe the same as list(parameters)?
+        print(list(parameters) == param_groups)
+        parameter_graph = _parameter_graph(
+            ensemble=source_ensemble,
+            iens_active_index=iens_active_index,
+            param_groups=param_groups,
+        )
+        print(
+            f"Full-graph nodes 2: {len(list(parameter_graph.nodes))} and edges {len(list(parameter_graph.edges))}"
+        )
 
     for param_group in parameters:
         source = source_ensemble
@@ -645,11 +652,29 @@ def analysis_ES(
             )
 
         else:
-            print("Not doing localization")
+            print("Not doing adaptive localization")
             # The batch of parameters
             X_local = temp_storage[param_group]
 
+            # # Get graph for param_group
+            # config_node = source_ensemble.experiment.parameter_configuration[param_group]
+            # graph = config_node.load_parameter_graph(source_ensemble, param_group, iens_active_index)
+            # print(f"graph nodes: {len(list(graph.nodes))}")
+            # print(f"graph edges: {len(list(graph.edges))}")
+
+            # Get H_local to parameter group
+            # p = len(graph)
+            # H_indices = range(parameter_count, p)
+            # parameter_count += p
+            # H_local = H[H_indices, :]
+
+            # Create smaller EnIF model objects, init with graph
+
             # Estimate precision matrix
+
+            # Update manually, using subset of sparse linear map
+
+            # Store updates
 
             # Update manually using global transition matrix T
             temp_storage[param_group] = X_local @ T
