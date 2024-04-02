@@ -25,7 +25,9 @@ import iterative_ensemble_smoother as ies
 import networkx as nx
 import numpy as np
 import psutil
+import scipy as sp
 import xarray as xr
+from graphite_maps.enif import EnIF
 from iterative_ensemble_smoother.experimental import (
     AdaptiveESMDA,
 )
@@ -602,13 +604,6 @@ def analysis_ES(
         )
         print(f"full parameter matrix shape: {X_full.shape}")
 
-        # parameter_count = 0
-
-        # Estimate sparse linear map
-
-        # Remove X_full
-
-        # maybe the same as list(parameters)?
         print(list(parameters) == param_groups)
         parameter_graph = _parameter_graph(
             ensemble=source_ensemble,
@@ -618,6 +613,31 @@ def analysis_ES(
         print(
             f"Full-graph nodes 2: {len(list(parameter_graph.nodes))} and edges {len(list(parameter_graph.edges))}"
         )
+
+        # Precision of observation errors
+        Prec_eps = sp.sparse.diags(
+            1.0 / observation_errors**2,
+            offsets=[0],
+            shape=(num_obs, num_obs),
+            format="csc",
+        )
+
+        # Create the EnIF object
+        gtmap = EnIF(Graph_u=parameter_graph, Prec_eps=Prec_eps)
+
+        # Fit both precision and sparse linear map H
+        gtmap.fit(X_full.T, S.T, learning_algorithm="influence-boost", verbose_level=5)
+
+        # Map prior sample to a posterior sample
+        _ = gtmap.transport(X_full.T, S.T, observation_values, verbose_level=5).T
+
+        # parameter_count = 0
+
+        # Estimate sparse linear map
+
+        # Remove X_full
+
+        # maybe the same as list(parameters)?
 
     for param_group in parameters:
         source = source_ensemble
