@@ -82,6 +82,7 @@ dependencies=[
     "tables; python_version >= '3.9'",
     "python-multipart",
     "pyarrow",
+    "graphite-maps@git+https://github.com/equinor/graphite-maps.git",
 ]
 
 [project.scripts]
