@@ -28,6 +28,9 @@ import psutil
 import scipy as sp
 import xarray as xr
 from graphite_maps.enif import EnIF
+from graphite_maps.precision_estimation import (
+    fit_precision_cholesky,
+)
 from iterative_ensemble_smoother.experimental import (
     AdaptiveESMDA,
 )
@@ -595,14 +598,24 @@ def analysis_ES(
         # Add identity in place for fast computation
         np.fill_diagonal(T, T.diagonal() + 1)
 
-        # Load all parameters _and_ graphs at the same time
-        param_groups = list(source_ensemble.experiment.parameter_configuration.keys())
-        X_full = _all_parameters(
-            ensemble=source_ensemble,
-            iens_active_index=iens_active_index,
-            param_groups=param_groups,
-        )
-        print(f"full parameter matrix shape: {X_full.shape}")
+        ## EnIF
+        # Iterate over parameters to fit sub-precision matrices
+        Prec_u = sp.sparse.csc_matrix((0, 0), dtype=float)
+        for param_group in parameters:
+            print(f"loading parameter group {param_group}")
+            source = source_ensemble
+            config_node = source_ensemble.experiment.parameter_configuration[
+                param_group
+            ]
+            temp_storage = _create_temporary_parameter_storage(
+                source, iens_active_index, param_group
+            )
+            X_local = temp_storage[param_group]
+            graph_u_sub = config_node.load_parameter_graph(
+                source_ensemble, param_group, iens_active_index
+            )
+            Prec_u_sub = fit_precision_cholesky(X_local.T, graph_u_sub, verbose_level=5)
+            Prec_u = sp.sparse.block_diag((Prec_u, Prec_u_sub), format="csc")
 
         # Precision of observation errors
         Prec_eps = sp.sparse.diags(
@@ -612,32 +625,72 @@ def analysis_ES(
             format="csc",
         )
 
-        print(list(parameters) == param_groups)
-        parameter_graph = _parameter_graph(
+        # Initialize EnIF object with full precision matrices
+        gtmap = EnIF(Prec_u=Prec_u, Prec_eps=Prec_eps)
+
+        # Load all parameters at once
+        X_full = _all_parameters(
             ensemble=source_ensemble,
             iens_active_index=iens_active_index,
-            param_groups=param_groups,
+            param_groups=list(
+                source_ensemble.experiment.parameter_configuration.keys()
+            ),
         )
-        print(
-            f"Full-graph nodes 2: {len(list(parameter_graph.nodes))} and edges {len(list(parameter_graph.edges))}"
-        )
+        print(f"full parameter matrix shape: {X_full.shape}")
 
-        # Create the EnIF object
-        gtmap = EnIF(Graph_u=parameter_graph, Prec_eps=Prec_eps)
-
-        # Fit both precision and sparse linear map H
+        # Call fit: Learn sparse linear map only
         gtmap.fit(X_full.T, S.T, learning_algorithm="influence-boost", verbose_level=5)
 
-        # Map prior sample to a posterior sample
+        # Call transport? might have to do some coding here
+        # Perhaps use an iterative solver instead of direct spsolve or similar
         _ = gtmap.transport(X_full.T, S.T, observation_values, verbose_level=5).T
 
-        # parameter_count = 0
+        # Iterate over parameters and update tempstorage
+        # Note: iterating realization-by-realization would be preferable
 
-        # Estimate sparse linear map
+        # # Load all parameters _and_ graphs at the same time
+        # param_groups = list(source_ensemble.experiment.parameter_configuration.keys())
+        # X_full = _all_parameters(
+        #     ensemble=source_ensemble,
+        #     iens_active_index=iens_active_index,
+        #     param_groups=param_groups,
+        # )
+        # print(f"full parameter matrix shape: {X_full.shape}")
 
-        # Remove X_full
+        # # Precision of observation errors
+        # Prec_eps = sp.sparse.diags(
+        #     [1.0 / observation_errors**2],
+        #     offsets=[0],
+        #     shape=(num_obs, num_obs),
+        #     format="csc",
+        # )
 
-        # maybe the same as list(parameters)?
+        # print(list(parameters) == param_groups)
+        # parameter_graph = _parameter_graph(
+        #     ensemble=source_ensemble,
+        #     iens_active_index=iens_active_index,
+        #     param_groups=param_groups,
+        # )
+        # print(
+        #     f"Full-graph nodes 2: {len(list(parameter_graph.nodes))} and edges {len(list(parameter_graph.edges))}"
+        # )
+
+        # # Create the EnIF object
+        # gtmap = EnIF(Graph_u=parameter_graph, Prec_eps=Prec_eps)
+
+        # # Fit both precision and sparse linear map H
+        # gtmap.fit(X_full.T, S.T, learning_algorithm="influence-boost", verbose_level=5)
+
+        # # Map prior sample to a posterior sample
+        # _ = gtmap.transport(X_full.T, S.T, observation_values, verbose_level=5).T
+
+        # # parameter_count = 0
+
+        # # Estimate sparse linear map
+
+        # # Remove X_full
+
+        # # maybe the same as list(parameters)?
 
     for param_group in parameters:
         source = source_ensemble
