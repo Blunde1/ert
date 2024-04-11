@@ -34,6 +34,7 @@ from graphite_maps.precision_estimation import (
 from iterative_ensemble_smoother.experimental import (
     AdaptiveESMDA,
 )
+from sklearn.preprocessing import StandardScaler
 from typing_extensions import Self
 
 from ..config.analysis_module import ESSettings, IESSettings
@@ -601,6 +602,7 @@ def analysis_ES(
         ## EnIF
         # Re-use cholesky ordering, etc. related to graph optimization
         graph_cache = {}
+        scaler_cache = {}
 
         # Iterate over parameters to fit sub-precision matrices
         Prec_u = sp.sparse.csc_matrix((0, 0), dtype=float)
@@ -614,6 +616,10 @@ def analysis_ES(
                 source, iens_active_index, param_group
             )
             X_local = temp_storage[param_group]
+            X_local_scaler = StandardScaler()
+            X_scaled = X_local_scaler.fit_transform(X_local.T)
+            scaler_cache[param_group] = X_local_scaler
+
             graph_u_sub = config_node.load_parameter_graph(
                 source_ensemble, param_group, iens_active_index
             )
@@ -636,7 +642,7 @@ def analysis_ES(
 
             Prec_u_sub, Graph_C_sub, perm_compose_sub, P_rev_sub, P_order_sub = (
                 fit_precision_cholesky(
-                    X_local.T,
+                    X_scaled,
                     graph_u_sub,
                     ordering_method="amd",
                     verbose_level=5,
