@@ -599,6 +599,9 @@ def analysis_ES(
         np.fill_diagonal(T, T.diagonal() + 1)
 
         ## EnIF
+        # Re-use cholesky ordering, etc. related to graph optimization
+        graph_cache = {}
+
         # Iterate over parameters to fit sub-precision matrices
         Prec_u = sp.sparse.csc_matrix((0, 0), dtype=float)
         for param_group in parameters:
@@ -614,8 +617,43 @@ def analysis_ES(
             graph_u_sub = config_node.load_parameter_graph(
                 source_ensemble, param_group, iens_active_index
             )
-            Prec_u_sub = fit_precision_cholesky(X_local.T, graph_u_sub, verbose_level=5)
+
+            # A very simple hash key for graph
+            graph_key = (graph_u_sub.number_of_nodes(), graph_u_sub.number_of_edges())
+            if graph_key in graph_cache:
+                # Reuse the cached Prec_u_sub if available
+                print("Graph-key exists. Re-using ordering and chol information")
+                Graph_C_sub, perm_compose_sub, P_rev_sub, P_order_sub = graph_cache[
+                    graph_key
+                ]
+            else:
+                Graph_C_sub, perm_compose_sub, P_rev_sub, P_order_sub = (
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+
+            Prec_u_sub, Graph_C_sub, perm_compose_sub, P_rev_sub, P_order_sub = (
+                fit_precision_cholesky(
+                    X_local.T,
+                    graph_u_sub,
+                    verbose_level=5,
+                    Graph_C=Graph_C_sub,
+                    perm_compose=perm_compose_sub,
+                    P_rev=P_rev_sub,
+                    P_order=P_order_sub,
+                )
+            )
             Prec_u = sp.sparse.block_diag((Prec_u, Prec_u_sub), format="csc")
+
+            if graph_key not in graph_cache:
+                graph_cache[graph_key] = (
+                    Graph_C_sub,
+                    perm_compose_sub,
+                    P_rev_sub,
+                    P_order_sub,
+                )
 
         # Precision of observation errors
         Prec_eps = sp.sparse.diags(
