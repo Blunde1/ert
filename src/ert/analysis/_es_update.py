@@ -638,6 +638,7 @@ def analysis_ES(
                 fit_precision_cholesky(
                     X_local.T,
                     graph_u_sub,
+                    ordering_method="amd",
                     verbose_level=5,
                     Graph_C=Graph_C_sub,
                     perm_compose=perm_compose_sub,
