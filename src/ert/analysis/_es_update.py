@@ -681,7 +681,9 @@ def analysis_ES(
 
         # Call transport? might have to do some coding here
         # Perhaps use an iterative solver instead of direct spsolve or similar
-        _ = gtmap.transport(X_full.T, S.T, observation_values, verbose_level=5).T
+        _ = gtmap.transport(
+            X_full.T, S.T, observation_values, iterative=True, verbose_level=5
+        ).T
 
         # Iterate over parameters and update tempstorage
         # Note: iterating realization-by-realization would be preferable
