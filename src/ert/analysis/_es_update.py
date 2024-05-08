@@ -653,6 +653,7 @@ def analysis_ES(
         # scaler_cache = {}
 
         # Iterate over parameters to fit sub-precision matrices
+        start_enif = time.time()
         Prec_u = sp.sparse.csc_matrix((0, 0), dtype=float)
         for param_group in parameters:
             print(f"loading parameter group {param_group}")
@@ -791,6 +792,8 @@ def analysis_ES(
                 target_ensemble,
             )
 
+        stop_enif = time.time()
+        print(f"EnIF total update time: {stop_enif - start_enif} seconds")
         # Iterate over parameters and update tempstorage
         # Note: iterating realization-by-realization would be preferable
 
