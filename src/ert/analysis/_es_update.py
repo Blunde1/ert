@@ -688,7 +688,7 @@ def analysis_ES(
                 cov_shrinkage=True,
                 symmetrization=True,
                 shrinkage_target=2,
-                inflation_factor=1.0,
+                inflation_factor=5.0,
             )
 
             # # A very simple hash key for graph
@@ -757,9 +757,6 @@ def analysis_ES(
         with open("../output/01_drogon_ahm_no_seismic/prec_u.pkl", "wb") as file:
             pickle.dump(Prec_u, file)
 
-        with open("../output/01_drogon_ahm_no_seismic/H.pkl", "wb") as file:
-            pickle.dump(gtmap.H, file)
-
         with open("../output/01_drogon_ahm_no_seismic/S.pkl", "wb") as file:
             pickle.dump(S, file)
 
@@ -773,6 +770,9 @@ def analysis_ES(
 
         # Call fit: Learn sparse linear map only
         gtmap.fit(X_full.T, S.T, learning_algorithm="influence-boost", verbose_level=5)
+
+        with open("../output/01_drogon_ahm_no_seismic/H.pkl", "wb") as file:
+            pickle.dump(gtmap.H, file)
 
         # Call transport? might have to do some coding here
         # Perhaps use an iterative solver instead of direct spsolve or similar
