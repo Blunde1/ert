@@ -43,6 +43,9 @@ args = dict(
         "-DCMAKE_OSX_DEPLOYMENT_TARGET=10.15",
     ],
     cmake_source_dir="src/clib/",
+    dependency_links=[
+        "git+https://github.com/equinor/GraphSPME.git#subdirectory=python-package@master#egg=Package"
+    ],
 )
 
 setup(**args)

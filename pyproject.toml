@@ -83,7 +83,6 @@ dependencies=[
     "python-multipart",
     "pyarrow",
     "graphite-maps@git+https://github.com/equinor/graphite-maps.git",
-    "graphspme@git+https://github.com/equinor/GraphSPME.git",
 ]
 
 [project.scripts]
