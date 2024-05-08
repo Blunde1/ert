@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import pickle
 import time
 from collections import UserDict, defaultdict
 from dataclasses import dataclass, field
@@ -683,9 +684,9 @@ def analysis_ES(
             Prec_u_sub = gspme.prec_sparse(
                 X_local.T,
                 Z,
-                markov_order=2,
+                markov_order=1,
                 cov_shrinkage=True,
-                symmetrization=False,
+                symmetrization=True,
                 shrinkage_target=2,
                 inflation_factor=1.0,
             )
@@ -737,7 +738,11 @@ def analysis_ES(
         )
 
         # Initialize EnIF object with full precision matrices
-        gtmap = EnIF(Prec_u=Prec_u, Prec_eps=Prec_eps)
+        eps = 1e-1  # for better condition number
+        gtmap = EnIF(
+            Prec_u=(1 - eps) * Prec_u + eps * sp.sparse.eye(Prec_u.shape[0]),
+            Prec_eps=Prec_eps,
+        )
 
         # Load all parameters at once
         X_full = _all_parameters(
@@ -748,6 +753,23 @@ def analysis_ES(
             ),
         )
         print(f"full parameter matrix shape: {X_full.shape}")
+
+        with open("../output/01_drogon_ahm_no_seismic/prec_u.pkl", "wb") as file:
+            pickle.dump(Prec_u, file)
+
+        with open("../output/01_drogon_ahm_no_seismic/H.pkl", "wb") as file:
+            pickle.dump(gtmap.H, file)
+
+        with open("../output/01_drogon_ahm_no_seismic/S.pkl", "wb") as file:
+            pickle.dump(S, file)
+
+        with open(
+            "../output/01_drogon_ahm_no_seismic/observation_values.pkl", "wb"
+        ) as file:
+            pickle.dump(observation_values, file)
+
+        with open("../output/01_drogon_ahm_no_seismic/Prec_eps.pkl", "wb") as file:
+            pickle.dump(Prec_eps, file)
 
         # Call fit: Learn sparse linear map only
         gtmap.fit(X_full.T, S.T, learning_algorithm="influence-boost", verbose_level=5)
