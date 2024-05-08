@@ -21,6 +21,7 @@ from typing import (
     Union,
 )
 
+import graphspme as gspme
 import iterative_ensemble_smoother as ies
 import networkx as nx
 import numpy as np
@@ -28,13 +29,9 @@ import psutil
 import scipy as sp
 import xarray as xr
 from graphite_maps.enif import EnIF
-from graphite_maps.precision_estimation import (
-    fit_precision_cholesky,
-)
 from iterative_ensemble_smoother.experimental import (
     AdaptiveESMDA,
 )
-from sklearn.preprocessing import StandardScaler
 from typing_extensions import Self
 
 from ..config.analysis_module import ESSettings, IESSettings
@@ -569,14 +566,14 @@ def analysis_ES(
         raise ErtAnalysisError("No active observations for update step")
     smoother_snapshot.update_step_snapshots = update_snapshot
 
-    smoother_es = ies.ESMDA(
-        covariance=observation_errors**2,
-        observations=observation_values,
-        alpha=1,  # The user is responsible for scaling observation covariance (esmda usage)
-        seed=rng,
-        inversion=module.inversion,
-    )
-    truncation = module.enkf_truncation
+    # smoother_es = ies.ESMDA(
+    #     covariance=observation_errors**2,
+    #     observations=observation_values,
+    #     alpha=1,  # The user is responsible for scaling observation covariance (esmda usage)
+    #     seed=rng,
+    #     inversion=module.inversion,
+    # )
+    # truncation = module.enkf_truncation
 
     if module.localization:
         smoother_adaptive_es = AdaptiveESMDA(
@@ -592,17 +589,68 @@ def analysis_ES(
             ensemble_size=ensemble_size, alpha=1.0
         )
 
-    else:
-        # Compute transition matrix so that
-        # X_posterior = X_prior @ T
-        T = smoother_es.compute_transition_matrix(Y=S, alpha=1.0, truncation=truncation)
-        # Add identity in place for fast computation
-        np.fill_diagonal(T, T.diagonal() + 1)
+        for param_group in parameters:
+            source = source_ensemble
+            temp_storage = _create_temporary_parameter_storage(
+                source, iens_active_index, param_group
+            )
+            # if module.localization:
+            num_params = temp_storage[param_group].shape[0]
+            batch_size = _calculate_adaptive_batch_size(num_params, num_obs)
+            batches = _split_by_batchsize(np.arange(0, num_params), batch_size)
 
-        ## EnIF
+            log_msg = f"Running localization on {num_params} parameters, {num_obs} responses, {ensemble_size} realizations and {len(batches)} batches"
+            _logger.info(log_msg)
+            progress_callback(AnalysisStatusEvent(msg=log_msg))
+
+            start = time.time()
+            for param_batch_idx in batches:
+                X_local = temp_storage[param_group][param_batch_idx, :]
+                temp_storage[param_group][param_batch_idx, :] = (
+                    smoother_adaptive_es.assimilate(
+                        X=X_local,
+                        Y=S,
+                        D=D,
+                        alpha=1.0,  # The user is responsible for scaling observation covariance (esmda usage)
+                        correlation_threshold=module.correlation_threshold,
+                        cov_YY=cov_YY,
+                        progress_callback=adaptive_localization_progress_callback,
+                    )
+                )
+                _logger.info(
+                    f"Adaptive Localization of {param_group} completed in {(time.time() - start) / 60} minutes"
+                )
+
+                log_msg = f"Storing data for {param_group}.."
+                _logger.info(log_msg)
+                progress_callback(AnalysisStatusEvent(msg=log_msg))
+                start = time.time()
+                _save_temp_storage_to_disk(
+                    target_ensemble, temp_storage, iens_active_index
+                )
+                _logger.info(
+                    f"Storing data for {param_group} completed in {(time.time() - start) / 60} minutes"
+                )
+
+                _copy_unupdated_parameters(
+                    list(source_ensemble.experiment.parameter_configuration.keys()),
+                    parameters,
+                    iens_active_index,
+                    source_ensemble,
+                    target_ensemble,
+                )
+
+    else:
+        # # Compute transition matrix so that
+        # # X_posterior = X_prior @ T
+        # T = smoother_es.compute_transition_matrix(Y=S, alpha=1.0, truncation=truncation)
+        # # Add identity in place for fast computation
+        # np.fill_diagonal(T, T.diagonal() + 1)
+
+        ### EnIF ###
         # Re-use cholesky ordering, etc. related to graph optimization
-        graph_cache = {}
-        scaler_cache = {}
+        # graph_cache = {}
+        # scaler_cache = {}
 
         # Iterate over parameters to fit sub-precision matrices
         Prec_u = sp.sparse.csc_matrix((0, 0), dtype=float)
@@ -616,51 +664,68 @@ def analysis_ES(
                 source, iens_active_index, param_group
             )
             X_local = temp_storage[param_group]
-            X_local_scaler = StandardScaler()
-            X_scaled = X_local_scaler.fit_transform(X_local.T)
-            scaler_cache[param_group] = X_local_scaler
+            # X_local_scaler = StandardScaler()
+            # X_scaled = X_local_scaler.fit_transform(X_local.T)
+            # scaler_cache[param_group] = X_local_scaler
 
             graph_u_sub = config_node.load_parameter_graph(
                 source_ensemble, param_group, iens_active_index
             )
 
-            # A very simple hash key for graph
-            graph_key = (graph_u_sub.number_of_nodes(), graph_u_sub.number_of_edges())
-            if graph_key in graph_cache:
-                # Reuse the cached Prec_u_sub if available
-                print("Graph-key exists. Re-using ordering and chol information")
-                Graph_C_sub, perm_compose_sub, P_rev_sub, P_order_sub = graph_cache[
-                    graph_key
-                ]
-            else:
-                Graph_C_sub, perm_compose_sub, P_rev_sub, P_order_sub = (
-                    None,
-                    None,
-                    None,
-                    None,
-                )
+            # Matrix representation of graph
+            Z = nx.to_scipy_sparse_array(graph_u_sub)
+            Z.data[:] = 1
+            Z = Z.tolil()
+            Z.setdiag(1)
+            Z = sp.csc_matrix(Z)
 
-            Prec_u_sub, Graph_C_sub, perm_compose_sub, P_rev_sub, P_order_sub = (
-                fit_precision_cholesky(
-                    X_scaled,
-                    graph_u_sub,
-                    ordering_method="amd",
-                    verbose_level=5,
-                    Graph_C=Graph_C_sub,
-                    perm_compose=perm_compose_sub,
-                    P_rev=P_rev_sub,
-                    P_order=P_order_sub,
-                )
+            Prec_u_sub = gspme.prec_sparse(
+                X_local.T,
+                Z,
+                markov_order=2,
+                cov_shrinkage=True,
+                symmetrization=False,
+                shrinkage_target=2,
+                inflation_factor=1.0,
             )
+
+            # # A very simple hash key for graph
+            # graph_key = (graph_u_sub.number_of_nodes(), graph_u_sub.number_of_edges())
+            # if graph_key in graph_cache:
+            #     # Reuse the cached Prec_u_sub if available
+            #     print("Graph-key exists. Re-using ordering and chol information")
+            #     Graph_C_sub, perm_compose_sub, P_rev_sub, P_order_sub = graph_cache[
+            #         graph_key
+            #     ]
+            # else:
+            #     Graph_C_sub, perm_compose_sub, P_rev_sub, P_order_sub = (
+            #         None,
+            #         None,
+            #         None,
+            #         None,
+            #     )
+
+            # Prec_u_sub, Graph_C_sub, perm_compose_sub, P_rev_sub, P_order_sub = (
+            #     fit_precision_cholesky(
+            #         X_scaled,
+            #         graph_u_sub,
+            #         ordering_method="amd",
+            #         verbose_level=5,
+            #         Graph_C=Graph_C_sub,
+            #         perm_compose=perm_compose_sub,
+            #         P_rev=P_rev_sub,
+            #         P_order=P_order_sub,
+            #     )
+            # )
             Prec_u = sp.sparse.block_diag((Prec_u, Prec_u_sub), format="csc")
 
-            if graph_key not in graph_cache:
-                graph_cache[graph_key] = (
-                    Graph_C_sub,
-                    perm_compose_sub,
-                    P_rev_sub,
-                    P_order_sub,
-                )
+            # if graph_key not in graph_cache:
+            #     graph_cache[graph_key] = (
+            #         Graph_C_sub,
+            #         perm_compose_sub,
+            #         P_rev_sub,
+            #         P_order_sub,
+            #     )
 
         # Precision of observation errors
         Prec_eps = sp.sparse.diags(
@@ -688,9 +753,43 @@ def analysis_ES(
 
         # Call transport? might have to do some coding here
         # Perhaps use an iterative solver instead of direct spsolve or similar
-        _ = gtmap.transport(
+        X_full = gtmap.transport(
             X_full.T, S.T, observation_values, iterative=True, verbose_level=5
         ).T
+
+        # Iterate over parameters to store the updated ensemble
+        parameters_updated = 0
+        for param_group in parameters:
+            source = source_ensemble
+            config_node = source_ensemble.experiment.parameter_configuration[
+                param_group
+            ]
+            temp_storage = _create_temporary_parameter_storage(
+                source, iens_active_index, param_group
+            )
+            parameters_to_update = temp_storage[param_group].shape[0]
+            param_group_indices = np.arange(
+                parameters_updated, parameters_updated + parameters_to_update
+            )
+            temp_storage[param_group] = X_full[:, param_group_indices]
+            parameters_updated += parameters_to_update
+
+            log_msg = f"Storing data for {param_group}.."
+            _logger.info(log_msg)
+            progress_callback(AnalysisStatusEvent(msg=log_msg))
+            start = time.time()
+            _save_temp_storage_to_disk(target_ensemble, temp_storage, iens_active_index)
+            _logger.info(
+                f"Storing data for {param_group} completed in {(time.time() - start) / 60} minutes"
+            )
+
+            _copy_unupdated_parameters(
+                list(source_ensemble.experiment.parameter_configuration.keys()),
+                parameters,
+                iens_active_index,
+                source_ensemble,
+                target_ensemble,
+            )
 
         # Iterate over parameters and update tempstorage
         # Note: iterating realization-by-realization would be preferable
@@ -739,82 +838,102 @@ def analysis_ES(
 
         # # maybe the same as list(parameters)?
 
-    for param_group in parameters:
-        source = source_ensemble
-        temp_storage = _create_temporary_parameter_storage(
-            source, iens_active_index, param_group
-        )
-        if module.localization:
-            num_params = temp_storage[param_group].shape[0]
-            batch_size = _calculate_adaptive_batch_size(num_params, num_obs)
-            batches = _split_by_batchsize(np.arange(0, num_params), batch_size)
+    # if module.localization:
+    #     for param_group in parameters:
+    #         source = source_ensemble
+    #         temp_storage = _create_temporary_parameter_storage(
+    #             source, iens_active_index, param_group
+    #         )
+    #         #if module.localization:
+    #         num_params = temp_storage[param_group].shape[0]
+    #         batch_size = _calculate_adaptive_batch_size(num_params, num_obs)
+    #         batches = _split_by_batchsize(np.arange(0, num_params), batch_size)
 
-            log_msg = f"Running localization on {num_params} parameters, {num_obs} responses, {ensemble_size} realizations and {len(batches)} batches"
-            _logger.info(log_msg)
-            progress_callback(AnalysisStatusEvent(msg=log_msg))
+    #         log_msg = f"Running localization on {num_params} parameters, {num_obs} responses, {ensemble_size} realizations and {len(batches)} batches"
+    #         _logger.info(log_msg)
+    #         progress_callback(AnalysisStatusEvent(msg=log_msg))
 
-            start = time.time()
-            for param_batch_idx in batches:
-                X_local = temp_storage[param_group][param_batch_idx, :]
-                temp_storage[param_group][param_batch_idx, :] = (
-                    smoother_adaptive_es.assimilate(
-                        X=X_local,
-                        Y=S,
-                        D=D,
-                        alpha=1.0,  # The user is responsible for scaling observation covariance (esmda usage)
-                        correlation_threshold=module.correlation_threshold,
-                        cov_YY=cov_YY,
-                        progress_callback=adaptive_localization_progress_callback,
-                    )
-                )
-            _logger.info(
-                f"Adaptive Localization of {param_group} completed in {(time.time() - start) / 60} minutes"
-            )
+    #         start = time.time()
+    #         for param_batch_idx in batches:
+    #             X_local = temp_storage[param_group][param_batch_idx, :]
+    #             temp_storage[param_group][param_batch_idx, :] = (
+    #                 smoother_adaptive_es.assimilate(
+    #                     X=X_local,
+    #                     Y=S,
+    #                     D=D,
+    #                     alpha=1.0,  # The user is responsible for scaling observation covariance (esmda usage)
+    #                     correlation_threshold=module.correlation_threshold,
+    #                     cov_YY=cov_YY,
+    #                     progress_callback=adaptive_localization_progress_callback,
+    #                 )
+    #             )
+    #             _logger.info(
+    #                 f"Adaptive Localization of {param_group} completed in {(time.time() - start) / 60} minutes"
+    #             )
 
-        else:
-            print("Not doing adaptive localization")
-            # The batch of parameters
-            X_local = temp_storage[param_group]
+    #             log_msg = f"Storing data for {param_group}.."
+    #             _logger.info(log_msg)
+    #             progress_callback(AnalysisStatusEvent(msg=log_msg))
+    #             start = time.time()
+    #             _save_temp_storage_to_disk(target_ensemble, temp_storage, iens_active_index)
+    #             _logger.info(
+    #                 f"Storing data for {param_group} completed in {(time.time() - start) / 60} minutes"
+    #             )
 
-            # # Get graph for param_group
-            # config_node = source_ensemble.experiment.parameter_configuration[param_group]
-            # graph = config_node.load_parameter_graph(source_ensemble, param_group, iens_active_index)
-            # print(f"graph nodes: {len(list(graph.nodes))}")
-            # print(f"graph edges: {len(list(graph.edges))}")
+    #             _copy_unupdated_parameters(
+    #                 list(source_ensemble.experiment.parameter_configuration.keys()),
+    #                 parameters,
+    #                 iens_active_index,
+    #                 source_ensemble,
+    #                 target_ensemble,
+    #             )
 
-            # Get H_local to parameter group
-            # p = len(graph)
-            # H_indices = range(parameter_count, p)
-            # parameter_count += p
-            # H_local = H[H_indices, :]
+    # else:
+    #     print("Not doing adaptive localization")
+    #     pass
 
-            # Create smaller EnIF model objects, init with graph
+    # The batch of parameters
+    # X_local = temp_storage[param_group]
 
-            # Estimate precision matrix
+    # # Get graph for param_group
+    # config_node = source_ensemble.experiment.parameter_configuration[param_group]
+    # graph = config_node.load_parameter_graph(source_ensemble, param_group, iens_active_index)
+    # print(f"graph nodes: {len(list(graph.nodes))}")
+    # print(f"graph edges: {len(list(graph.edges))}")
 
-            # Update manually, using subset of sparse linear map
+    # Get H_local to parameter group
+    # p = len(graph)
+    # H_indices = range(parameter_count, p)
+    # parameter_count += p
+    # H_local = H[H_indices, :]
 
-            # Store updates
+    # Create smaller EnIF model objects, init with graph
 
-            # Update manually using global transition matrix T
-            temp_storage[param_group] = X_local @ T
+    # Estimate precision matrix
 
-        log_msg = f"Storing data for {param_group}.."
-        _logger.info(log_msg)
-        progress_callback(AnalysisStatusEvent(msg=log_msg))
-        start = time.time()
-        _save_temp_storage_to_disk(target_ensemble, temp_storage, iens_active_index)
-        _logger.info(
-            f"Storing data for {param_group} completed in {(time.time() - start) / 60} minutes"
-        )
+    # Update manually, using subset of sparse linear map
 
-        _copy_unupdated_parameters(
-            list(source_ensemble.experiment.parameter_configuration.keys()),
-            parameters,
-            iens_active_index,
-            source_ensemble,
-            target_ensemble,
-        )
+    # Store updates
+
+    # Update manually using global transition matrix T
+    # temp_storage[param_group] = X_local @ T
+
+    # log_msg = f"Storing data for {param_group}.."
+    # _logger.info(log_msg)
+    # progress_callback(AnalysisStatusEvent(msg=log_msg))
+    # start = time.time()
+    # _save_temp_storage_to_disk(target_ensemble, temp_storage, iens_active_index)
+    # _logger.info(
+    #     f"Storing data for {param_group} completed in {(time.time() - start) / 60} minutes"
+    # )
+
+    # _copy_unupdated_parameters(
+    #     list(source_ensemble.experiment.parameter_configuration.keys()),
+    #     parameters,
+    #     iens_active_index,
+    #     source_ensemble,
+    #     target_ensemble,
+    # )
 
 
 def analysis_IES(
