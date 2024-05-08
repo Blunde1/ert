@@ -678,7 +678,7 @@ def analysis_ES(
             Z.data[:] = 1
             Z = Z.tolil()
             Z.setdiag(1)
-            Z = sp.csc_matrix(Z)
+            Z = sp.sparse.csc_matrix(Z)
 
             Prec_u_sub = gspme.prec_sparse(
                 X_local.T,
