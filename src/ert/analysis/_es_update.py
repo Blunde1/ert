@@ -754,6 +754,9 @@ def analysis_ES(
         )
         print(f"full parameter matrix shape: {X_full.shape}")
 
+        with open("../output/01_drogon_ahm_no_seismic/X_full.pkl", "wb") as file:
+            pickle.dump(X_full, file)
+
         with open("../output/01_drogon_ahm_no_seismic/prec_u.pkl", "wb") as file:
             pickle.dump(Prec_u, file)
 
