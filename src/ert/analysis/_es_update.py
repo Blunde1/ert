@@ -30,6 +30,7 @@ import psutil
 import scipy as sp
 import xarray as xr
 from graphite_maps.enif import EnIF
+from graphite_maps.linear_regression import linear_boost_ic_regression
 from iterative_ensemble_smoother.experimental import (
     AdaptiveESMDA,
 )
@@ -737,13 +738,6 @@ def analysis_ES(
             format="csc",
         )
 
-        # Initialize EnIF object with full precision matrices
-        eps = 1e-1  # for better condition number
-        gtmap = EnIF(
-            Prec_u=(1 - eps) * Prec_u + eps * sp.sparse.eye(Prec_u.shape[0]),
-            Prec_eps=Prec_eps,
-        )
-
         # Load all parameters at once
         X_full = _all_parameters(
             ensemble=source_ensemble,
@@ -772,7 +766,23 @@ def analysis_ES(
             pickle.dump(Prec_eps, file)
 
         # Call fit: Learn sparse linear map only
-        gtmap.fit(X_full.T, S.T, learning_algorithm="influence-boost", verbose_level=5)
+        H = linear_boost_ic_regression(
+            U=X_full.T,
+            Y=S.T,
+            learning_rate=0.7,
+            effective_dimension=100 + 3 * 100 + 9 * 1000,
+            verbose_level=5,
+        )
+
+        # Initialize EnIF object with full precision matrices
+        eps = 1e-1  # for better condition number
+        gtmap = EnIF(
+            Prec_u=(1 - eps) * Prec_u + eps * sp.sparse.eye(Prec_u.shape[0]),
+            Prec_eps=Prec_eps,
+            H=H,
+        )
+
+        # gtmap.fit(X_full.T, S.T, learning_algorithm="influence-boost", learning_rate=0.7, effective_dimension=100 + 3*100 + 9*1000, verbose_level=5)
 
         with open("../output/01_drogon_ahm_no_seismic/H.pkl", "wb") as file:
             pickle.dump(gtmap.H, file)
