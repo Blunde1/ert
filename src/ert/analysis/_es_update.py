@@ -689,7 +689,7 @@ def analysis_ES(
                 cov_shrinkage=True,
                 symmetrization=False,
                 shrinkage_target=2,
-                inflation_factor=4.0,
+                inflation_factor=5.0,
             )
 
             # # A very simple hash key for graph
@@ -775,7 +775,7 @@ def analysis_ES(
         )
 
         # Initialize EnIF object with full precision matrices
-        eps = 1e-2  # for better condition number
+        eps = 1e-1  # for better condition number
         gtmap = EnIF(
             Prec_u=(1 - eps) * Prec_u + eps * sp.sparse.eye(Prec_u.shape[0]),
             Prec_eps=Prec_eps,
