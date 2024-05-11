@@ -685,7 +685,7 @@ def analysis_ES(
             Prec_u_sub = gspme.prec_sparse(
                 X_local.T,
                 Z,
-                markov_order=2,
+                markov_order=1,
                 cov_shrinkage=True,
                 symmetrization=False,
                 shrinkage_target=2,
@@ -802,6 +802,11 @@ def analysis_ES(
             verbose_level=5,
         ).T
 
+        with open(
+            "../output/01_drogon_ahm_no_seismic/X_full_posterior.pkl", "wb"
+        ) as file:
+            pickle.dump(X_full, file)
+
         # Iterate over parameters to store the updated ensemble
         parameters_updated = 0
         for param_group in parameters:
@@ -816,7 +821,7 @@ def analysis_ES(
             param_group_indices = np.arange(
                 parameters_updated, parameters_updated + parameters_to_update
             )
-            temp_storage[param_group] = X_full[:, param_group_indices]
+            temp_storage[param_group] = X_full[param_group_indices, :]
             parameters_updated += parameters_to_update
 
             log_msg = f"Storing data for {param_group}.."
