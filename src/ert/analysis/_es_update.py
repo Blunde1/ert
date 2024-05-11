@@ -685,11 +685,11 @@ def analysis_ES(
             Prec_u_sub = gspme.prec_sparse(
                 X_local.T,
                 Z,
-                markov_order=1,
+                markov_order=2,
                 cov_shrinkage=True,
-                symmetrization=True,
+                symmetrization=False,
                 shrinkage_target=2,
-                inflation_factor=5.0,
+                inflation_factor=2.0,
             )
 
             # # A very simple hash key for graph
@@ -787,10 +787,19 @@ def analysis_ES(
         with open("../output/01_drogon_ahm_no_seismic/H.pkl", "wb") as file:
             pickle.dump(gtmap.H, file)
 
+        update_indices = gtmap.get_update_indices(
+            neighbor_propagation_order=8, verbose_level=1
+        )
+
         # Call transport? might have to do some coding here
         # Perhaps use an iterative solver instead of direct spsolve or similar
         X_full = gtmap.transport(
-            X_full.T, S.T, observation_values, iterative=True, verbose_level=5
+            X_full.T,
+            S.T,
+            observation_values,
+            update_indices=update_indices,
+            iterative=True,
+            verbose_level=5,
         ).T
 
         # Iterate over parameters to store the updated ensemble
