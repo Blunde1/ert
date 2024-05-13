@@ -690,7 +690,7 @@ def analysis_ES(
                 cov_shrinkage=True,
                 symmetrization=False,
                 shrinkage_target=2,
-                inflation_factor=8.0,
+                inflation_factor=15.0,
             )
 
             # # A very simple hash key for graph
@@ -798,7 +798,7 @@ def analysis_ES(
             pickle.dump(gtmap.H, file)
 
         update_indices = gtmap.get_update_indices(
-            neighbor_propagation_order=8, verbose_level=1
+            neighbor_propagation_order=10, verbose_level=1
         )
 
         # Call transport? might have to do some coding here
