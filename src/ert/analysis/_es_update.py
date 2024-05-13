@@ -686,7 +686,7 @@ def analysis_ES(
             Prec_u_sub = gspme.prec_sparse(
                 X_scaled,
                 Z,
-                markov_order=2,
+                markov_order=0,
                 cov_shrinkage=True,
                 symmetrization=False,
                 shrinkage_target=2,
@@ -773,6 +773,7 @@ def analysis_ES(
 
         X_full_scaler = StandardScaler()
         X_full_scaled = X_full_scaler.fit_transform(X_full.T)
+        print(f"Scaled X_full has shape: {X_full_scaled.shape}")
 
         # Call fit: Learn sparse linear map only
         H = linear_boost_ic_regression(
