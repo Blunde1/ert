@@ -774,19 +774,12 @@ def analysis_ES(
         X_full_scaler = StandardScaler()
         X_full_scaled = X_full_scaler.fit_transform(X_full.T)
 
-        scaler_s = StandardScaler()
-        S_scaled = scaler_s.fit_transform(S.T)
-        observation_values_scaled = scaler_s.transform(
-            observation_values.reshape((1, S.shape[1]))
-        )
-        Prec_eps_scaled = Prec_eps.multiply(sp.sparse.diags(scaler_s.scale_))
-
         # Call fit: Learn sparse linear map only
         H = linear_boost_ic_regression(
             U=X_full_scaled,
-            Y=S_scaled,
+            Y=S.T,
             learning_rate=0.7,
-            effective_dimension=100 + 3 * 100 + 9 * 1000,
+            effective_dimension=100 + 3 * 100 + 9 * 100,
             verbose_level=5,
         )
 
@@ -794,7 +787,7 @@ def analysis_ES(
         eps = 1e-2  # for better condition number
         gtmap = EnIF(
             Prec_u=(1 - eps) * Prec_u + eps * sp.sparse.eye(Prec_u.shape[0]),
-            Prec_eps=Prec_eps_scaled,
+            Prec_eps=Prec_eps,
             H=H,
         )
 
@@ -804,15 +797,15 @@ def analysis_ES(
             pickle.dump(gtmap.H, file)
 
         update_indices = gtmap.get_update_indices(
-            neighbor_propagation_order=10, verbose_level=1
+            neighbor_propagation_order=8, verbose_level=1
         )
 
         # Call transport? might have to do some coding here
         # Perhaps use an iterative solver instead of direct spsolve or similar
         X_full_scaled_post = gtmap.transport(
             X_full_scaled,
-            S_scaled,
-            observation_values_scaled,
+            S.T,
+            observation_values,
             update_indices=update_indices,
             iterative=True,
             verbose_level=5,
