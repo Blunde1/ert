@@ -686,7 +686,7 @@ def analysis_ES(
             Prec_u_sub = gspme.prec_sparse(
                 X_scaled,
                 Z,
-                markov_order=0,
+                markov_order=2,
                 cov_shrinkage=True,
                 symmetrization=False,
                 shrinkage_target=2,
