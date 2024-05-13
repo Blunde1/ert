@@ -686,7 +686,7 @@ def analysis_ES(
             Prec_u_sub = gspme.prec_sparse(
                 X_scaled,
                 Z,
-                markov_order=1,
+                markov_order=2,
                 cov_shrinkage=True,
                 symmetrization=False,
                 shrinkage_target=2,
@@ -766,23 +766,35 @@ def analysis_ES(
         with open("../output/01_drogon_ahm_no_seismic/Prec_eps.pkl", "wb") as file:
             pickle.dump(Prec_eps, file)
 
+        with open(
+            "../output/01_drogon_ahm_no_seismic/observation_errors.pkl", "wb"
+        ) as file:
+            pickle.dump(observation_errors, file)
+
         X_full_scaler = StandardScaler()
         X_full_scaled = X_full_scaler.fit_transform(X_full.T)
+
+        scaler_s = StandardScaler()
+        S_scaled = scaler_s.fit_transform(S.T)
+        observation_values_scaled = scaler_s.transform(
+            observation_values.reshape((1, S.shape[1]))
+        )
+        Prec_eps_scaled = Prec_eps.multiply(sp.sparse.diags(scaler_s.scale_))
 
         # Call fit: Learn sparse linear map only
         H = linear_boost_ic_regression(
             U=X_full_scaled,
-            Y=S.T,
+            Y=S_scaled,
             learning_rate=0.7,
             effective_dimension=100 + 3 * 100 + 9 * 1000,
             verbose_level=5,
         )
 
         # Initialize EnIF object with full precision matrices
-        eps = 1e-1  # for better condition number
+        eps = 1e-2  # for better condition number
         gtmap = EnIF(
             Prec_u=(1 - eps) * Prec_u + eps * sp.sparse.eye(Prec_u.shape[0]),
-            Prec_eps=Prec_eps,
+            Prec_eps=Prec_eps_scaled,
             H=H,
         )
 
@@ -792,15 +804,15 @@ def analysis_ES(
             pickle.dump(gtmap.H, file)
 
         update_indices = gtmap.get_update_indices(
-            neighbor_propagation_order=8, verbose_level=1
+            neighbor_propagation_order=10, verbose_level=1
         )
 
         # Call transport? might have to do some coding here
         # Perhaps use an iterative solver instead of direct spsolve or similar
         X_full_scaled_post = gtmap.transport(
             X_full_scaled,
-            S.T,
-            observation_values,
+            S_scaled,
+            observation_values_scaled,
             update_indices=update_indices,
             iterative=True,
             verbose_level=5,
