@@ -779,7 +779,7 @@ def analysis_ES(
         H = linear_boost_ic_regression(
             U=X_full_scaled,
             Y=S.T,
-            learning_rate=0.95,
+            learning_rate=0.7,
             effective_dimension=0,
             verbose_level=5,
         )
