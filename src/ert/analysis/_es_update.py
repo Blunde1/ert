@@ -686,7 +686,7 @@ def analysis_ES(
             Prec_u_sub = gspme.prec_sparse(
                 X_scaled,
                 Z,
-                markov_order=2,
+                markov_order=1,
                 cov_shrinkage=True,
                 symmetrization=False,
                 shrinkage_target=2,
@@ -798,7 +798,7 @@ def analysis_ES(
             pickle.dump(gtmap.H, file)
 
         update_indices = gtmap.get_update_indices(
-            neighbor_propagation_order=9, verbose_level=1
+            neighbor_propagation_order=7, verbose_level=1
         )
 
         # Call transport? might have to do some coding here
