@@ -690,7 +690,7 @@ def analysis_ES(
                 cov_shrinkage=True,
                 symmetrization=False,
                 shrinkage_target=2,
-                inflation_factor=3.0,
+                inflation_factor=5.0,
             )
 
             # # A very simple hash key for graph
@@ -779,7 +779,7 @@ def analysis_ES(
         H = linear_boost_ic_regression(
             U=X_full_scaled,
             Y=S.T,
-            learning_rate=0.7,
+            learning_rate=0.95,
             effective_dimension=0,
             verbose_level=5,
         )
