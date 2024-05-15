@@ -34,7 +34,6 @@ from graphite_maps.linear_regression import linear_boost_ic_regression
 from iterative_ensemble_smoother.experimental import (
     AdaptiveESMDA,
 )
-from sklearn.preprocessing import StandardScaler
 from typing_extensions import Self
 
 from ..config.analysis_module import ESSettings, IESSettings
@@ -668,8 +667,8 @@ def analysis_ES(
                 source, iens_active_index, param_group
             )
             X_local = temp_storage[param_group]
-            X_local_scaler = StandardScaler()
-            X_scaled = X_local_scaler.fit_transform(X_local.T)
+            # X_local_scaler = StandardScaler()
+            # X_scaled = X_local_scaler.fit_transform(X_local.T)
             # scaler_cache[param_group] = X_local_scaler
 
             graph_u_sub = config_node.load_parameter_graph(
@@ -684,7 +683,7 @@ def analysis_ES(
             Z = sp.sparse.csc_matrix(Z)
 
             Prec_u_sub = gspme.prec_sparse(
-                X_scaled,
+                X_local.T,
                 Z,
                 markov_order=1,
                 cov_shrinkage=True,
@@ -771,13 +770,13 @@ def analysis_ES(
         ) as file:
             pickle.dump(observation_errors, file)
 
-        X_full_scaler = StandardScaler()
-        X_full_scaled = X_full_scaler.fit_transform(X_full.T)
-        print(f"Scaled X_full has shape: {X_full_scaled.shape}")
+        # X_full_scaler = StandardScaler()
+        # X_full_scaled = X_full_scaler.fit_transform(X_full.T)
+        # print(f"Scaled X_full has shape: {X_full_scaled.shape}")
 
         # Call fit: Learn sparse linear map only
         H = linear_boost_ic_regression(
-            U=X_full_scaled,
+            U=X_full.T,
             Y=S.T,
             learning_rate=0.95,
             effective_dimension=0,
@@ -803,15 +802,15 @@ def analysis_ES(
 
         # Call transport? might have to do some coding here
         # Perhaps use an iterative solver instead of direct spsolve or similar
-        X_full_scaled_post = gtmap.transport(
-            X_full_scaled,
+        X_full = gtmap.transport(
+            X_full.T,
             S.T,
             observation_values,
             update_indices=update_indices,
             iterative=True,
             verbose_level=5,
-        )
-        X_full = X_full_scaler.inverse_transform(X_full_scaled_post).T
+        ).T
+        # X_full = X_full_scaler.inverse_transform(X_full_scaled_post).T
 
         with open(
             "../output/01_drogon_ahm_no_seismic/X_full_posterior.pkl", "wb"
