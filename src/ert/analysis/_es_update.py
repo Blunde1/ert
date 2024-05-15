@@ -688,7 +688,7 @@ def analysis_ES(
                 Z,
                 markov_order=1,
                 cov_shrinkage=True,
-                symmetrization=False,
+                symmetrization=True,
                 shrinkage_target=2,
                 inflation_factor=10.0,
             )
