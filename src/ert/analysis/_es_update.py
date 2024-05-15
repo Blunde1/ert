@@ -689,7 +689,7 @@ def analysis_ES(
                 cov_shrinkage=True,
                 symmetrization=False,
                 shrinkage_target=2,
-                inflation_factor=12.0,
+                inflation_factor=15.0,
             )
 
             # # A very simple hash key for graph
