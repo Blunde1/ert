@@ -810,8 +810,8 @@ def analysis_ES(
             update_indices=update_indices,
             iterative=True,
             verbose_level=5,
-        ).T
-        # X_full = X_full_scaler.inverse_transform(X_full_scaled_post).T
+        )
+        X_full = X_full_scaler.inverse_transform(X_full).T
 
         with open(
             "../output/01_drogon_ahm_no_seismic/X_full_posterior.pkl", "wb"
