@@ -516,6 +516,27 @@ def analysis_ES(
     else:
         ### EnIF ###
         start_enif = time.time()
+
+        # Load all parameters at once
+        X_full = _all_parameters(
+            ensemble=source_ensemble,
+            iens_active_index=iens_active_index,
+        )
+        print(f"full parameter matrix shape: {X_full.shape}")
+
+        X_full_scaler = StandardScaler()
+        X_full_scaled = X_full_scaler.fit_transform(X_full.T)
+        print(f"Scaled X_full has shape: {X_full_scaled.shape}")
+
+        # Call fit: Learn sparse linear map only
+        H = linear_boost_ic_regression(
+            U=X_full_scaled,
+            Y=S.T,
+            learning_rate=1.0,
+            effective_dimension=0,
+            verbose_level=5,
+        )
+
         Prec_u = sp.sparse.csc_matrix((0, 0), dtype=float)
         for param_group in parameters:
             print(f"loading parameter group {param_group}")
@@ -561,28 +582,8 @@ def analysis_ES(
             format="csc",
         )
 
-        # Load all parameters at once
-        X_full = _all_parameters(
-            ensemble=source_ensemble,
-            iens_active_index=iens_active_index,
-        )
-        print(f"full parameter matrix shape: {X_full.shape}")
-
-        X_full_scaler = StandardScaler()
-        X_full_scaled = X_full_scaler.fit_transform(X_full.T)
-        print(f"Scaled X_full has shape: {X_full_scaled.shape}")
-
-        # Call fit: Learn sparse linear map only
-        H = linear_boost_ic_regression(
-            U=X_full_scaled,
-            Y=S.T,
-            learning_rate=0.95,
-            effective_dimension=0,
-            verbose_level=5,
-        )
-
         # Initialize EnIF object with full precision matrices
-        eps = 1e-2  # for better condition number
+        eps = 1e-3  # for better condition number
         gtmap = EnIF(
             Prec_u=(1 - eps) * Prec_u + eps * sp.sparse.eye(Prec_u.shape[0]),
             Prec_eps=Prec_eps,
