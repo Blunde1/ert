@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Mapping, MutableMapping, Tuple, Union
 
+import networkx as nx
 import numpy as np
 import xarray as xr
 
@@ -104,6 +105,11 @@ class ExtParamConfig(ParameterConfig):
     def load_parameters(
         self, ensemble: Ensemble, group: str, realizations: npt.NDArray[np.int_]
     ) -> npt.NDArray[np.float_]:
+        raise NotImplementedError()
+
+    def load_parameter_graph(
+        self, ensemble: Ensemble, group: str, realizations: npt.NDArray[np.int_]
+    ) -> nx.Graph:
         raise NotImplementedError()
 
     @staticmethod
