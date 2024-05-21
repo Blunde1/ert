@@ -565,9 +565,6 @@ def analysis_ES(
         X_full = _all_parameters(
             ensemble=source_ensemble,
             iens_active_index=iens_active_index,
-            param_groups=list(
-                source_ensemble.experiment.parameter_configuration.keys()
-            ),
         )
         print(f"full parameter matrix shape: {X_full.shape}")
 
