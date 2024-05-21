@@ -564,11 +564,11 @@ def analysis_ES(
             Prec_u_sub = gspme.prec_sparse(
                 X_scaled,
                 Z,
-                markov_order=1,
+                markov_order=2,
                 cov_shrinkage=True,
                 symmetrization=True,
                 shrinkage_target=2,
-                inflation_factor=10.0,
+                inflation_factor=np.log(graph_u_sub.number_of_edges()),
             )
 
             # Add to block-diagonal full precision
@@ -591,7 +591,7 @@ def analysis_ES(
         )
 
         update_indices = gtmap.get_update_indices(
-            neighbor_propagation_order=10, verbose_level=1
+            neighbor_propagation_order=6, verbose_level=1
         )
 
         # Call transport? might have to do some coding here
