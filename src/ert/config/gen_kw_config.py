@@ -18,6 +18,7 @@ from typing import (
     overload,
 )
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -299,6 +300,16 @@ class GenKwConfig(ParameterConfig):
         ensemble: Ensemble, group: str, realizations: npt.NDArray[np.int_]
     ) -> npt.NDArray[np.float_]:
         return ensemble.load_parameters(group, realizations)["values"].values.T
+
+    def load_parameter_graph(
+        self, ensemble: Ensemble, group: str, realizations: npt.NDArray[np.int_]
+    ) -> nx.Graph:
+        sample = ensemble.load_parameters(group, realizations)["values"].values
+        _, p = sample.shape
+        # Create a graph with no edges
+        graph_independence = nx.Graph()
+        graph_independence.add_nodes_from(range(p))
+        return graph_independence
 
     def shouldUseLogScale(self, keyword: str) -> bool:
         for tf in self.transfer_functions:

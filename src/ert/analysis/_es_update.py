@@ -19,12 +19,18 @@ from typing import (
     TypeVar,
 )
 
+import graphspme as gspme
 import iterative_ensemble_smoother as ies
+import networkx as nx
 import numpy as np
 import psutil
+import scipy as sp
+from graphite_maps.enif import EnIF
+from graphite_maps.linear_regression import linear_boost_ic_regression
 from iterative_ensemble_smoother.experimental import (
     AdaptiveESMDA,
 )
+from sklearn.preprocessing import StandardScaler
 from typing_extensions import Self
 
 from ..config.analysis_config import ObservationGroups, UpdateSettings
@@ -444,15 +450,6 @@ def analysis_ES(
         )
         raise ErtAnalysisError(msg)
 
-    smoother_es = ies.ESMDA(
-        covariance=observation_errors**2,
-        observations=observation_values,
-        alpha=1,  # The user is responsible for scaling observation covariance (esmda usage)
-        seed=rng,
-        inversion=module.inversion,
-    )
-    truncation = module.enkf_truncation
-
     if module.localization:
         smoother_adaptive_es = AdaptiveESMDA(
             covariance=observation_errors**2,
@@ -467,23 +464,15 @@ def analysis_ES(
             ensemble_size=ensemble_size, alpha=1.0
         )
 
-    else:
-        # Compute transition matrix so that
-        # X_posterior = X_prior @ T
-        T = smoother_es.compute_transition_matrix(Y=S, alpha=1.0, truncation=truncation)
-        # Add identity in place for fast computation
-        np.fill_diagonal(T, T.diagonal() + 1)
-
-    for param_group in parameters:
-        param_ensemble_array = _load_param_ensemble_array(
-            source_ensemble, param_group, iens_active_index
-        )
-        if module.localization:
+        for param_group in parameters:
+            param_ensemble_array = _load_param_ensemble_array(
+                source_ensemble, param_group, iens_active_index
+            )
             num_params = param_ensemble_array.shape[0]
             batch_size = _calculate_adaptive_batch_size(num_params, num_obs)
             batches = _split_by_batchsize(np.arange(0, num_params), batch_size)
 
-            log_msg = f"Running localization on {num_params} parameters, {num_obs} responses, {ensemble_size} realizations and {len(batches)} batches"
+            log_msg = f"Running adaptive localization on {num_params} parameters, {num_obs} responses, {ensemble_size} realizations and {len(batches)} batches"
             logger.info(log_msg)
             progress_callback(AnalysisStatusEvent(msg=log_msg))
 
@@ -505,29 +494,156 @@ def analysis_ES(
                 f"Adaptive Localization of {param_group} completed in {(time.time() - start) / 60} minutes"
             )
 
-        else:
-            param_ensemble_array = param_ensemble_array @ T.astype(
-                param_ensemble_array.dtype
+            log_msg = f"Storing data for {param_group}.."
+            logger.info(log_msg)
+            progress_callback(AnalysisStatusEvent(msg=log_msg))
+            start = time.time()
+            _save_param_ensemble_array_to_disk(
+                target_ensemble, param_ensemble_array, param_group, iens_active_index
+            )
+            logger.info(
+                f"Storing data for {param_group} completed in {(time.time() - start) / 60} minutes"
             )
 
-        log_msg = f"Storing data for {param_group}.."
-        logger.info(log_msg)
-        progress_callback(AnalysisStatusEvent(msg=log_msg))
-        start = time.time()
-        _save_param_ensemble_array_to_disk(
-            target_ensemble, param_ensemble_array, param_group, iens_active_index
-        )
-        logger.info(
-            f"Storing data for {param_group} completed in {(time.time() - start) / 60} minutes"
+            _copy_unupdated_parameters(
+                list(source_ensemble.experiment.parameter_configuration.keys()),
+                parameters,
+                iens_active_index,
+                source_ensemble,
+                target_ensemble,
+            )
+
+    else:
+        ### EnIF ###
+        start_enif = time.time()
+        Prec_u = sp.sparse.csc_matrix((0, 0), dtype=float)
+        for param_group in parameters:
+            print(f"loading parameter group {param_group}")
+            config_node = source_ensemble.experiment.parameter_configuration[
+                param_group
+            ]
+            X_local = _load_param_ensemble_array(
+                source_ensemble, param_group, iens_active_index
+            )
+            X_local_scaler = StandardScaler()
+            X_scaled = X_local_scaler.fit_transform(X_local.T)
+
+            graph_u_sub = config_node.load_parameter_graph(
+                source_ensemble, param_group, iens_active_index
+            )
+
+            # Matrix representation of graph
+            Z = nx.to_scipy_sparse_array(graph_u_sub)
+            Z.data[:] = 1
+            Z = Z.tolil()
+            Z.setdiag(1)
+            Z = sp.sparse.csc_matrix(Z)
+
+            # Precision for this parameter group
+            Prec_u_sub = gspme.prec_sparse(
+                X_scaled,
+                Z,
+                markov_order=1,
+                cov_shrinkage=True,
+                symmetrization=True,
+                shrinkage_target=2,
+                inflation_factor=10.0,
+            )
+
+            # Add to block-diagonal full precision
+            Prec_u = sp.sparse.block_diag((Prec_u, Prec_u_sub), format="csc")
+
+        # Precision of observation errors
+        Prec_eps = sp.sparse.diags(
+            [1.0 / observation_errors**2],
+            offsets=[0],
+            shape=(num_obs, num_obs),
+            format="csc",
         )
 
-        _copy_unupdated_parameters(
-            list(source_ensemble.experiment.parameter_configuration.keys()),
-            parameters,
-            iens_active_index,
-            source_ensemble,
-            target_ensemble,
+        # Load all parameters at once
+        X_full = _all_parameters(
+            ensemble=source_ensemble,
+            iens_active_index=iens_active_index,
+            param_groups=list(
+                source_ensemble.experiment.parameter_configuration.keys()
+            ),
         )
+        print(f"full parameter matrix shape: {X_full.shape}")
+
+        X_full_scaler = StandardScaler()
+        X_full_scaled = X_full_scaler.fit_transform(X_full.T)
+        print(f"Scaled X_full has shape: {X_full_scaled.shape}")
+
+        # Call fit: Learn sparse linear map only
+        H = linear_boost_ic_regression(
+            U=X_full_scaled,
+            Y=S.T,
+            learning_rate=0.95,
+            effective_dimension=0,
+            verbose_level=5,
+        )
+
+        # Initialize EnIF object with full precision matrices
+        eps = 1e-2  # for better condition number
+        gtmap = EnIF(
+            Prec_u=(1 - eps) * Prec_u + eps * sp.sparse.eye(Prec_u.shape[0]),
+            Prec_eps=Prec_eps,
+            H=H,
+        )
+
+        update_indices = gtmap.get_update_indices(
+            neighbor_propagation_order=10, verbose_level=1
+        )
+
+        # Call transport? might have to do some coding here
+        # Perhaps use an iterative solver instead of direct spsolve or similar
+        X_full = gtmap.transport(
+            X_full_scaled,
+            S.T,
+            observation_values,
+            update_indices=update_indices,
+            iterative=True,
+            verbose_level=5,
+        )
+        X_full = X_full_scaler.inverse_transform(X_full).T
+
+        # Iterate over parameters to store the updated ensemble
+        parameters_updated = 0
+        for param_group in parameters:
+            log_msg = f"Storing data for {param_group}.."
+            logger.info(log_msg)
+            progress_callback(AnalysisStatusEvent(msg=log_msg))
+            start = time.time()
+
+            param_ensemble_array = _load_param_ensemble_array(
+                source_ensemble, param_group, iens_active_index
+            )
+            parameters_to_update = param_ensemble_array.shape[0]
+            param_group_indices = np.arange(
+                parameters_updated, parameters_updated + parameters_to_update
+            )
+            _save_param_ensemble_array_to_disk(
+                target_ensemble,
+                X_full[param_group_indices, :],
+                param_group,
+                iens_active_index,
+            )
+            parameters_updated += parameters_to_update
+
+            logger.info(
+                f"Storing data for {param_group} completed in {(time.time() - start) / 60} minutes"
+            )
+            _copy_unupdated_parameters(
+                list(source_ensemble.experiment.parameter_configuration.keys()),
+                parameters,
+                iens_active_index,
+                source_ensemble,
+                target_ensemble,
+            )
+
+        stop_enif = time.time()
+        print(f"EnIF total update time: {stop_enif - start_enif} seconds")
 
 
 def analysis_IES(
