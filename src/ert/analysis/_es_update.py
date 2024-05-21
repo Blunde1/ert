@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import pickle
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -568,7 +569,9 @@ def analysis_ES(
                 cov_shrinkage=True,
                 symmetrization=True,
                 shrinkage_target=2,
-                inflation_factor=np.log(graph_u_sub.number_of_edges()),
+                inflation_factor=np.log(
+                    graph_u_sub.number_of_nodes() + graph_u_sub.number_of_edges()
+                ),
             )
 
             # Add to block-diagonal full precision
@@ -581,6 +584,31 @@ def analysis_ES(
             shape=(num_obs, num_obs),
             format="csc",
         )
+
+        with open("../output/01_drogon_ahm_no_seismic/X_full.pkl", "wb") as file:
+            pickle.dump(X_full, file)
+
+        with open("../output/01_drogon_ahm_no_seismic/prec_u.pkl", "wb") as file:
+            pickle.dump(Prec_u, file)
+
+        with open("../output/01_drogon_ahm_no_seismic/S.pkl", "wb") as file:
+            pickle.dump(S, file)
+
+        with open(
+            "../output/01_drogon_ahm_no_seismic/observation_values.pkl", "wb"
+        ) as file:
+            pickle.dump(observation_values, file)
+
+        with open("../output/01_drogon_ahm_no_seismic/Prec_eps.pkl", "wb") as file:
+            pickle.dump(Prec_eps, file)
+
+        with open(
+            "../output/01_drogon_ahm_no_seismic/observation_errors.pkl", "wb"
+        ) as file:
+            pickle.dump(observation_errors, file)
+
+        with open("../output/01_drogon_ahm_no_seismic/H.pkl", "wb") as file:
+            pickle.dump(H, file)
 
         # Initialize EnIF object with full precision matrices
         eps = 1e-3  # for better condition number
