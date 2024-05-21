@@ -83,6 +83,8 @@ dependencies=[
     "websockets",
     "xarray<2024.5.0",
     "xtgeo >= 3.3.0",
+    "networkx",
+    "graphite-maps@git+https://github.com/equinor/graphite-maps.git",
 ]
 
 [project.scripts]
