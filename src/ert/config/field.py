@@ -70,7 +70,7 @@ def adjust_graph_for_masking(G: nx.Graph, mask_indices: npt.NDArray[np.int_]):
     Returns:
     - The adjusted graph
     """
-    for removed_count, i in enumerate(mask_indices):
+    for removed_count, i in enumerate(np.sort(mask_indices)):
         # Adjust i for the number of removals to get the current index in the graph
         current_index = i - removed_count
         neighbors = list(G.neighbors(current_index))
