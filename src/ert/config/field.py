@@ -58,7 +58,9 @@ def create_flattened_cube_graph(px: int, py: int, pz: int) -> nx.Graph:
     return G
 
 
-def adjust_graph_for_masking(G: nx.Graph, mask_indices: npt.NDArray[np.int_]):
+def adjust_graph_for_masking(
+    G: nx.Graph, mask: npt.NDArray[np.bool_], marginalize: bool = False
+):
     """
     Adjust the graph G according to the masking indices.
     For each masked index, its neighbors become neighbors of each other,
@@ -70,23 +72,29 @@ def adjust_graph_for_masking(G: nx.Graph, mask_indices: npt.NDArray[np.int_]):
     Returns:
     - The adjusted graph
     """
-    for removed_count, i in enumerate(np.sort(mask_indices)):
+    print(f"Mask size: {mask.size} shape {mask.shape}")
+    print(f"mask itself: {mask}")
+    mask_indices = np.where(mask)[0]
+    print(f"mask_indices: {mask_indices}")
+    for removed_count, i in enumerate(mask_indices):
         # Adjust i for the number of removals to get the current index in the graph
+        print(f"removed_count: {removed_count}, i: {i}")
         current_index = i - removed_count
-        neighbors = list(G.neighbors(current_index))
 
-        # Make neighbors of the current node neighbors of each other
-        for u in neighbors:
-            for v in neighbors:
-                if u != v and not G.has_edge(u, v):
-                    G.add_edge(u, v)
+        if marginalize:
+            # Make neighbors of the current node neighbors of each other
+            neighbors = list(G.neighbors(current_index))
+            for u in neighbors:
+                for v in neighbors:
+                    if u != v and not G.has_edge(u, v):
+                        G.add_edge(u, v)
 
         # Remove the current node
         G.remove_node(current_index)
 
         # Decrement indices of nodes greater than the current node
         mapping = {
-            node: (node - 1 if node > current_index else node) for node in G.nodes()
+            node: (node - 1 if node >= current_index else node) for node in G.nodes()
         }
         nx.relabel_nodes(G, mapping, copy=False)
 
@@ -281,9 +289,7 @@ class Field(ParameterConfig):
         parameter_graph = create_flattened_cube_graph(
             px=self.nx, py=self.ny, pz=self.nz
         )
-        return adjust_graph_for_masking(
-            G=parameter_graph, mask_indices=np.where(self.mask)[0]
-        )
+        return adjust_graph_for_masking(G=parameter_graph, mask_indices=self.mask)
 
     def _fetch_from_ensemble(self, real_nr: int, ensemble: Ensemble) -> xr.DataArray:
         da = ensemble.load_parameters(self.name, real_nr)["values"]
