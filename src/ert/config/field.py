@@ -289,7 +289,7 @@ class Field(ParameterConfig):
         parameter_graph = create_flattened_cube_graph(
             px=self.nx, py=self.ny, pz=self.nz
         )
-        return adjust_graph_for_masking(G=parameter_graph, mask_indices=self.mask)
+        return adjust_graph_for_masking(G=parameter_graph, mask=self.mask)
 
     def _fetch_from_ensemble(self, real_nr: int, ensemble: Ensemble) -> xr.DataArray:
         da = ensemble.load_parameters(self.name, real_nr)["values"]
