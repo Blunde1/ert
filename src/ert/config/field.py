@@ -7,6 +7,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self, overload
 
+import networkx as nx
 import numpy as np
 import xarray as xr
 from pydantic.dataclasses import dataclass
@@ -25,6 +26,80 @@ if TYPE_CHECKING:
     from ert.storage import Ensemble
 
 _logger = logging.getLogger(__name__)
+
+
+def create_flattened_cube_graph(px: int, py: int, pz: int) -> nx.Graph:
+    """Creates a graph representing the connectivity of a 3D cube (px, py, pz) in its
+    flattened form.
+
+    Each node corresponds to a voxel in the cube, with edges connecting direct neighbors
+    in x (depth), y (row), and z (column) directions.
+
+    The graph nodes are labeled using the flattening scheme defined by
+    `np.ravel_multi_index` to ensure proper indexing and avoid manual calculations.
+
+    Parameters:
+        px (int): Number of elements in x-direction (depth)
+        py (int): Number of elements in y-direction (rows)
+        pz (int): Number of elements in z-direction (columns)
+
+    Returns:
+        nx.Graph: A NetworkX graph where each node represents a voxel and edges represent
+        direct neighborhood connectivity.
+    """
+    G = nx.Graph()
+
+    # Generate all 3D coordinates
+    x, y, z = np.meshgrid(np.arange(px), np.arange(py), np.arange(pz), indexing="ij")
+
+    # Match the vectorization/flattening
+    node_indices = np.ravel_multi_index((x, y, z), (px, py, pz))
+
+    # Define neighbor shifts (x, y, z)
+    shifts = [
+        (1, 0, 0),  # +x (depth direction)
+        (0, 1, 0),  # +y (row direction)
+        (0, 0, 1),  # +z (column direction)
+    ]
+
+    for dx, dy, dz in shifts:
+        # Compute shifted indices
+        x_n, y_n, z_n = x + dx, y + dy, z + dz
+
+        # Ensure shifts remain within bounds
+        valid_mask = (x_n < px) & (y_n < py) & (z_n < pz)
+
+        # Flatten valid node pairs
+        start_nodes = node_indices[valid_mask]
+        end_nodes = np.ravel_multi_index(
+            (x_n[valid_mask], y_n[valid_mask], z_n[valid_mask]), (px, py, pz)
+        )
+
+        G.add_edges_from(zip(start_nodes, end_nodes, strict=False))
+
+    return G
+
+
+def adjust_graph_for_masking(G: nx.Graph, mask: npt.NDArray[np.bool_]):
+    """
+    Adjust the graph G according to the masking indices.
+    Removes nodes specified by the mask and relabels the remaining nodes
+    to have consecutive labels from 0 to G.number_of_nodes - 1.
+    Parameters:
+    - G: The graph to adjust
+    - mask: Boolean mask flattened array
+    Returns:
+    - The adjusted graph
+    """
+    # Step 1: Remove nodes specified by mask_indices
+    mask_indices = np.where(mask)[0]
+    G.remove_nodes_from(mask_indices)
+
+    # Step 2: Relabel remaining nodes to 0, 1, 2, ..., G.number_of_nodes - 1
+    new_labels = {old_label: new_label for new_label, old_label in enumerate(G.nodes())}
+    G = nx.relabel_nodes(G, new_labels, copy=False)
+
+    return G
 
 
 @dataclass
@@ -210,6 +285,14 @@ class Field(ParameterConfig):
             ]
         )
         return da.T.to_numpy()
+
+    def load_parameter_graph(
+        self, ensemble: Ensemble, group: str, realizations: npt.NDArray[np.int_]
+    ) -> nx.Graph:  # type: ignore
+        parameter_graph = create_flattened_cube_graph(
+            px=self.nx, py=self.ny, pz=self.nz
+        )
+        return adjust_graph_for_masking(G=parameter_graph, mask=self.mask.flatten())
 
     def _fetch_from_ensemble(self, real_nr: int, ensemble: Ensemble) -> xr.DataArray:
         da = ensemble.load_parameters(self.name, real_nr)["values"]
