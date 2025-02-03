@@ -126,7 +126,7 @@ class EnsembleSmoother(UpdateRunModel):
 
     @classmethod
     def name(cls) -> str:
-        return "Ensemble smoother"
+        return "Ensemble Information Filter"
 
     @classmethod
     def description(cls) -> str:
